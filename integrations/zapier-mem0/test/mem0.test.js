@@ -66,4 +66,14 @@ describe('Mem0 Zapier integration (E2E)', () => {
 		});
 		expect(afterDelete.length).toBe(0);
 	});
+
+	it('surfaces API errors instead of returning an empty array (search needs a filter)', async () => {
+		// filters is required by the API; omitting it must throw, not return [].
+		await expect(
+			appTester(App.searches.search_memories.operation.perform, {
+				authData,
+				inputData: { query: 'anything' },
+			}),
+		).rejects.toThrow();
+	});
 });

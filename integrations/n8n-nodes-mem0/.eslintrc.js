@@ -15,6 +15,12 @@ module.exports = {
 			files: ['./credentials/**/*.ts'],
 			plugins: ['eslint-plugin-n8n-nodes-base'],
 			extends: ['plugin:n8n-nodes-base/credentials'],
+			rules: {
+				// This rule only applies to nodes in n8n's main repository (where
+				// documentationUrl is an internal docs slug). Community nodes use a
+				// full external URL, so it is disabled here.
+				'n8n-nodes-base/cred-class-field-documentation-url-miscased': 'off',
+			},
 		},
 		{
 			files: ['./nodes/**/*.ts'],

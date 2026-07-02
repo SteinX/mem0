@@ -4,7 +4,7 @@ const perform = async (z, bundle) => {
 	const body = {
 		query: bundle.inputData.query,
 		output_format: 'v1.1',
-		limit: bundle.inputData.limit || 10,
+		top_k: Math.max(1, Math.floor(Number(bundle.inputData.limit) || 10)),
 	};
 	if (bundle.inputData.user_id) body.filters = { user_id: bundle.inputData.user_id };
 
@@ -29,8 +29,8 @@ module.exports = {
 		perform,
 		inputFields: [
 			{ key: 'query', label: 'Query', type: 'string', required: true },
-			{ key: 'user_id', label: 'User ID', type: 'string' },
-			{ key: 'limit', label: 'Limit', type: 'integer', default: '10' },
+			{ key: 'user_id', label: 'User ID', type: 'string', required: true },
+			{ key: 'limit', label: 'Limit', type: 'integer', default: 10 },
 		],
 		sample: { id: '00000000-0000-0000-0000-000000000000', memory: 'User loves hiking' },
 	},

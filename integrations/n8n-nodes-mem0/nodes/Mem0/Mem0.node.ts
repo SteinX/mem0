@@ -8,7 +8,6 @@ import {
 	INodeTypeDescription,
 	JsonObject,
 	NodeApiError,
-	NodeConnectionTypes,
 	NodeOperationError,
 	sleep,
 } from 'n8n-workflow';
@@ -31,8 +30,8 @@ export class Mem0 implements INodeType {
 		},
 		// Makes the node available to the AI Agent (Tools Agent) node.
 		usableAsTool: true,
-		inputs: [NodeConnectionTypes.Main],
-		outputs: [NodeConnectionTypes.Main],
+		inputs: ['main'],
+		outputs: ['main'],
 		credentials: [
 			{
 				name: 'mem0Api',
@@ -62,16 +61,10 @@ export class Mem0 implements INodeType {
 						description: 'Extract and store memories from messages',
 					},
 					{
-						name: 'Search',
-						value: 'search',
-						action: 'Search memories',
-						description: 'Semantic search over stored memories',
-					},
-					{
-						name: 'Get Many',
-						value: 'getAll',
-						action: 'Get many memories',
-						description: 'List stored memories for an entity',
+						name: 'Delete',
+						value: 'delete',
+						action: 'Delete a memory',
+						description: 'Delete a single memory by ID',
 					},
 					{
 						name: 'Get',
@@ -80,16 +73,22 @@ export class Mem0 implements INodeType {
 						description: 'Retrieve a single memory by ID',
 					},
 					{
+						name: 'Get Many',
+						value: 'getAll',
+						action: 'Get many memories',
+						description: 'List stored memories for an entity',
+					},
+					{
+						name: 'Search',
+						value: 'search',
+						action: 'Search memories',
+						description: 'Semantic search over stored memories',
+					},
+					{
 						name: 'Update',
 						value: 'update',
 						action: 'Update a memory',
 						description: 'Update the text or metadata of a memory',
-					},
-					{
-						name: 'Delete',
-						value: 'delete',
-						action: 'Delete a memory',
-						description: 'Delete a single memory by ID',
 					},
 				],
 				default: 'add',
@@ -201,15 +200,16 @@ export class Mem0 implements INodeType {
 				name: 'userId',
 				type: 'string',
 				default: '',
+				required: true,
 				displayOptions: { show: { resource: ['memory'], operation: ['search'] } },
-				description: 'Restrict the search to this user',
+				description: 'Restrict the search to this user (required — the API needs an entity filter)',
 			},
 			{
 				displayName: 'Limit',
 				name: 'limit',
 				type: 'number',
 				typeOptions: { minValue: 1 },
-				default: 10,
+				default: 50,
 				displayOptions: { show: { resource: ['memory'], operation: ['search'] } },
 				description: 'Max number of results to return',
 			},
@@ -220,8 +220,9 @@ export class Mem0 implements INodeType {
 				name: 'userId',
 				type: 'string',
 				default: '',
+				required: true,
 				displayOptions: { show: { resource: ['memory'], operation: ['getAll'] } },
-				description: 'Restrict the listing to this user',
+				description: 'Restrict the listing to this user (required — the API needs an entity filter)',
 			},
 			{
 				displayName: 'Page',
@@ -316,31 +317,48 @@ export class Mem0 implements INodeType {
 					if (addFields.agent_id) body.agent_id = addFields.agent_id;
 					if (addFields.run_id) body.run_id = addFields.run_id;
 					if (addFields.metadata) {
-						body.metadata =
-							typeof addFields.metadata === 'string'
-								? JSON.parse(addFields.metadata as string)
-								: addFields.metadata;
+						try {
+							body.metadata =
+								typeof addFields.metadata === 'string'
+									? JSON.parse(addFields.metadata as string)
+									: addFields.metadata;
+						} catch {
+							throw new NodeOperationError(this.getNode(), 'Invalid JSON in "Metadata" field', {
+								itemIndex: i,
+							});
+						}
 					}
 
 					const addResp = await request('POST', '/v3/memories/add/', body);
 					const waitForCompletion = this.getNodeParameter('waitForCompletion', i, true) as boolean;
+					const addStatus = addResp.status as string | undefined;
+					const isTerminal = addStatus === 'SUCCEEDED' || addStatus === 'FAILED';
 
-					// infer=true returns {event_id, status:PENDING}; poll until done.
-					if (waitForCompletion && addResp.status === 'PENDING' && addResp.event_id) {
+					// infer=true returns {event_id, status:PENDING|RUNNING}; poll until terminal.
+					if (waitForCompletion && addResp.event_id && !isTerminal) {
 						responseData = await pollEvent(request, addResp.event_id as string, this);
+					} else if (addStatus === 'FAILED') {
+						throw new NodeOperationError(
+							this.getNode(),
+							`Mem0 memory add failed: ${(addResp.message as string) || 'unknown error'}`,
+							{ itemIndex: i },
+						);
 					} else {
-						responseData = addResp;
+						// Sync path (infer=false) returns {status:SUCCEEDED, results:[...]}; unwrap for consistency.
+						responseData = Array.isArray(addResp.results)
+							? (addResp.results as IDataObject[])
+							: addResp;
 					}
 				} else if (operation === 'search') {
 					const body: IDataObject = {
 						query: this.getNodeParameter('query', i) as string,
 						output_format: 'v1.1',
-						limit: this.getNodeParameter('limit', i, 10) as number,
+						top_k: this.getNodeParameter('limit', i, 50) as number,
 					};
 					const userId = this.getNodeParameter('userId', i, '') as string;
 					if (userId) body.filters = { user_id: userId };
 					const resp = await request('POST', '/v3/memories/search/', body);
-					responseData = (resp.results as IDataObject[]) ?? resp;
+					responseData = Array.isArray(resp.results) ? (resp.results as IDataObject[]) : [];
 				} else if (operation === 'getAll') {
 					const userId = this.getNodeParameter('userId', i, '') as string;
 					const page = this.getNodeParameter('page', i, 1) as number;
@@ -348,7 +366,7 @@ export class Mem0 implements INodeType {
 					const body: IDataObject = {};
 					if (userId) body.filters = { user_id: userId };
 					const resp = await request('POST', '/v3/memories/', body, { page, page_size: pageSize });
-					responseData = (resp.results as IDataObject[]) ?? resp;
+					responseData = Array.isArray(resp.results) ? (resp.results as IDataObject[]) : [];
 				} else if (operation === 'get') {
 					const memoryId = this.getNodeParameter('memoryId', i) as string;
 					responseData = await request('GET', `/v1/memories/${memoryId}/`);
@@ -358,7 +376,20 @@ export class Mem0 implements INodeType {
 					const text = this.getNodeParameter('text', i, '') as string;
 					const metadata = this.getNodeParameter('metadata', i, '') as string;
 					if (text) body.text = text;
-					if (metadata) body.metadata = typeof metadata === 'string' ? JSON.parse(metadata) : metadata;
+					if (metadata) {
+						try {
+							body.metadata = typeof metadata === 'string' ? JSON.parse(metadata) : metadata;
+						} catch {
+							throw new NodeOperationError(this.getNode(), 'Invalid JSON in "Metadata" field', {
+								itemIndex: i,
+							});
+						}
+					}
+					if (Object.keys(body).length === 0) {
+						throw new NodeOperationError(this.getNode(), 'Provide text or metadata to update', {
+							itemIndex: i,
+						});
+					}
 					responseData = await request('PUT', `/v1/memories/${memoryId}/`, body);
 				} else if (operation === 'delete') {
 					const memoryId = this.getNodeParameter('memoryId', i) as string;
@@ -392,8 +423,12 @@ async function pollEvent(
 	for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
 		const event = await request('GET', `/v1/event/${eventId}/`);
 		const status = event.status as string;
-		if (status === 'SUCCEEDED' || status === 'FAILED') {
+		if (status === 'SUCCEEDED') {
 			return event;
+		}
+		if (status === 'FAILED') {
+			const reason = (event.error as string) || (event.message as string) || 'unknown error';
+			throw new NodeOperationError(ctx.getNode(), `Mem0 memory event ${eventId} failed: ${reason}`);
 		}
 		await sleep(POLL_INTERVAL_MS);
 	}

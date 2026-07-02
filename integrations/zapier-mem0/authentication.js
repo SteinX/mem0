@@ -27,5 +27,5 @@ module.exports = {
 		},
 	],
 	// Shown on the connection label in the Zap editor.
-	connectionLabel: 'Mem0 ({{bundle.authData.baseUrl}})',
+	connectionLabel: 'Mem0',
 };
