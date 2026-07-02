@@ -25,7 +25,7 @@ module.exports = {
 		perform,
 		inputFields: [
 			{ key: 'user_id', label: 'User ID', type: 'string', required: true },
-			{ key: 'limit', label: 'Limit', type: 'integer', default: 50 },
+			{ key: 'limit', label: 'Limit', type: 'integer', default: '50' },
 		],
 		sample: { id: '00000000-0000-0000-0000-000000000000', memory: 'User loves hiking' },
 	},

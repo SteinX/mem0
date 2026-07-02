@@ -30,7 +30,7 @@ module.exports = {
 		inputFields: [
 			{ key: 'query', label: 'Query', type: 'string', required: true },
 			{ key: 'user_id', label: 'User ID', type: 'string', required: true },
-			{ key: 'limit', label: 'Limit', type: 'integer', default: 10 },
+			{ key: 'limit', label: 'Limit', type: 'integer', default: '10' },
 		],
 		sample: { id: '00000000-0000-0000-0000-000000000000', memory: 'User loves hiking' },
 	},
