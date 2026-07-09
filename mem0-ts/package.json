@@ -85,6 +85,7 @@
   "author": "Deshraj Yadav",
   "license": "Apache-2.0",
   "devDependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.0.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.7.6",
     "@types/uuid": "^9.0.8",
@@ -108,6 +109,7 @@
   },
   "peerDependencies": {
     "@anthropic-ai/sdk": "^0.40.1",
+    "@aws-sdk/client-bedrock-runtime": "^3.0.0",
     "@aws-sdk/client-s3vectors": "3.967.0",
     "@azure/identity": "^4.0.0",
     "@azure/search-documents": "^12.0.0",
@@ -143,6 +145,9 @@
     "@zilliz/milvus2-sdk-node": "^2.4.0 || ^3.0.0"
   },
   "peerDependenciesMeta": {
+    "@aws-sdk/client-bedrock-runtime": {
+      "optional": true
+    },
     "mysql2": {
       "optional": true
     },
