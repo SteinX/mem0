@@ -6,7 +6,7 @@ cd /app
 # Swap NEXT_PUBLIC_* placeholders baked into .next/ at build time with the
 # container's real env values. Each placeholder must be declared in the
 # Dockerfile as `ENV NAME=NAME` so Next.js inlines the literal name. Currently:
-#   NEXT_PUBLIC_API_URL, NEXT_PUBLIC_INSTANCE_NAME
+#   NEXT_PUBLIC_API_URL, NEXT_PUBLIC_INSTANCE_NAME, NEXT_PUBLIC_MEM0_OSS_LIST_FETCH_LIMIT
 # New NEXT_PUBLIC_* vars must be added to the Dockerfile or this loop won't substitute them.
 printenv | grep '^NEXT_PUBLIC_' | while IFS='=' read -r key value; do
   escaped=$(printf '%s' "$value" | sed -e 's/[\\&|]/\\&/g')
