@@ -82,6 +82,16 @@ class TestAuthDisabled:
         resp = self.client.get("/memories", params={"user_id": "alice"})
         assert resp.status_code == 200
 
+    def test_all_memories_limit_uses_env_override(self):
+        app = _load_app({"ADMIN_API_KEY": "", "MEM0_OSS_LIST_FETCH_LIMIT": "5000"})
+        client = TestClient(app)
+        self.mock.vector_store.list.return_value = [[]]
+
+        resp = client.get("/memories", params={"top_k": 5000})
+
+        assert resp.status_code == 200
+        self.mock.vector_store.list.assert_called_with(top_k=5000)
+
     def test_create_memory_without_key(self):
         resp = self.client.post("/memories", json={
             "messages": [{"role": "user", "content": "I like pizza"}],

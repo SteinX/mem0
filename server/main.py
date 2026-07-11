@@ -381,7 +381,32 @@ def add_memory(memory_create: MemoryCreate, _auth=Depends(verify_auth)):
         raise upstream_error()
 
 
-ALL_MEMORIES_LIMIT = 1000
+DEFAULT_ALL_MEMORIES_LIMIT = 1000
+
+
+def _read_all_memories_limit() -> int:
+    raw = os.getenv("MEM0_OSS_LIST_FETCH_LIMIT")
+    if raw is None:
+        return DEFAULT_ALL_MEMORIES_LIMIT
+    try:
+        value = int(raw)
+    except ValueError:
+        logging.warning(
+            "Invalid MEM0_OSS_LIST_FETCH_LIMIT=%r; using default %s",
+            raw,
+            DEFAULT_ALL_MEMORIES_LIMIT,
+        )
+        return DEFAULT_ALL_MEMORIES_LIMIT
+    if value < 1:
+        logging.warning(
+            "MEM0_OSS_LIST_FETCH_LIMIT must be positive; using default %s",
+            DEFAULT_ALL_MEMORIES_LIMIT,
+        )
+        return DEFAULT_ALL_MEMORIES_LIMIT
+    return value
+
+
+ALL_MEMORIES_LIMIT = _read_all_memories_limit()
 _RESERVED_PAYLOAD_KEYS = {"data", "user_id", "agent_id", "run_id", "hash", "created_at", "updated_at", "expiration_date"}
 
 

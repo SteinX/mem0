@@ -27,8 +27,16 @@ import { useApiQuery } from "@/hooks/use-api-query";
 import { Memory } from "@/types/api";
 
 const PAGE_SIZE = 20;
-// Keep in sync with ALL_MEMORIES_LIMIT in server/main.py.
-const MEMORY_FETCH_LIMIT = 1000;
+const DEFAULT_MEMORY_FETCH_LIMIT = 1000;
+const configuredMemoryFetchLimit = Number.parseInt(
+  process.env.NEXT_PUBLIC_MEM0_OSS_LIST_FETCH_LIMIT || "",
+  10,
+);
+const MEMORY_FETCH_LIMIT =
+  Number.isFinite(configuredMemoryFetchLimit) && configuredMemoryFetchLimit > 0
+    ? configuredMemoryFetchLimit
+    : DEFAULT_MEMORY_FETCH_LIMIT;
+const MEMORY_FETCH_LIMIT_LABEL = MEMORY_FETCH_LIMIT.toLocaleString("en-US");
 
 export default function MemoriesPage() {
   const [userId, setUserId] = useState("");
@@ -102,8 +110,8 @@ export default function MemoriesPage() {
 
       {memories.length >= MEMORY_FETCH_LIMIT && (
         <UpgradeBanner
-          id="memories-1k"
-          message="1,000+ memories stored. Categories can help organize them."
+          id="memories-fetch-limit"
+          message={`${MEMORY_FETCH_LIMIT_LABEL}+ memories stored. Categories can help organize them.`}
           ctaLabel="Explore Cloud"
           ctaUrl="https://app.mem0.ai?utm_source=oss&utm_medium=dashboard-memories"
           variant="cloud"
