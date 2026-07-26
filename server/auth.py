@@ -240,6 +240,8 @@ async def require_credential_manager(
             status_code=403,
             detail="Client API keys cannot manage credentials.",
         )
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required.")
     return user
 
 

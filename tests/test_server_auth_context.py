@@ -282,6 +282,41 @@ def test_client_api_key_cannot_manage_credentials_over_http(
     assert all(response.json()["detail"] == "Client API keys cannot manage credentials." for response in responses)
 
 
+def test_non_admin_session_cannot_manage_credentials_over_http(
+    session,
+    monkeypatch,
+):
+    monkeypatch.setattr(auth, "ADMIN_API_KEY", "")
+    monkeypatch.setattr(auth, "AUTH_DISABLED", False)
+    user = _user()
+    user.role = "member"
+    session.add(user)
+    session.commit()
+    app = FastAPI()
+    app.include_router(api_keys_router.router)
+    app.dependency_overrides[get_db] = lambda: session
+    client = TestClient(app)
+    headers = {
+        "Authorization": f"Bearer {auth.create_access_token(str(user.id), user.role)}"
+    }
+
+    responses = [
+        client.get("/api-keys", headers=headers),
+        client.post(
+            "/api-keys",
+            headers=headers,
+            json={"label": "unauthorized-member-key"},
+        ),
+        client.delete(f"/api-keys/{uuid.uuid4()}", headers=headers),
+    ]
+
+    assert [response.status_code for response in responses] == [403, 403, 403]
+    assert all(
+        response.json()["detail"] == "Admin role required."
+        for response in responses
+    )
+
+
 def test_revoked_api_key_is_rejected_without_descriptor(session, monkeypatch):
     monkeypatch.setattr(auth, "ADMIN_API_KEY", "")
     monkeypatch.setattr(auth, "AUTH_DISABLED", False)
