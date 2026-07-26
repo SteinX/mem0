@@ -96,7 +96,7 @@ class CoreApiKeyCredentialResponse(BaseModel):
 
     kind: Literal["core_api_key"]
     id: uuid.UUID
-    label: str = Field(max_length=255)
+    label: str = Field(min_length=1, max_length=255)
     key_prefix: str = Field(min_length=1, max_length=12)
 
 

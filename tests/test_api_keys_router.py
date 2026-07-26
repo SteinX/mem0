@@ -67,3 +67,14 @@ def test_revoke_malformed_key_id_returns_404(client):
 def test_revoke_missing_valid_uuid_returns_404(client):
     resp = client.delete(f"/api-keys/{uuid.uuid4()}")
     assert resp.status_code == 404
+
+
+@pytest.mark.parametrize("label", ["", "   ", "x" * 256])
+def test_create_rejects_labels_outside_descriptor_contract(client, label):
+    resp = client.post("/api-keys", json={"label": label})
+    assert resp.status_code == 422
+
+
+def test_create_request_trims_label():
+    request = api_keys_router.CreateKeyRequest(label="  codex-devbox  ")
+    assert request.label == "codex-devbox"

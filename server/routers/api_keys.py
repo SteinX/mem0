@@ -1,8 +1,9 @@
 import uuid
 from datetime import datetime, timezone
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, StringConstraints
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -15,7 +16,14 @@ router = APIRouter(prefix="/api-keys", tags=["api-keys"])
 
 
 class CreateKeyRequest(BaseModel):
-    label: str
+    label: Annotated[
+        str,
+        StringConstraints(
+            strip_whitespace=True,
+            min_length=1,
+            max_length=255,
+        ),
+    ]
 
 
 class CreateKeyResponse(BaseModel):

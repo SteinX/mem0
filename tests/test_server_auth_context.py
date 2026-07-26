@@ -6,10 +6,12 @@ from functools import partial
 
 import anyio
 import pytest
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
 from starlette.requests import Request
 
 
@@ -18,8 +20,8 @@ if SERVER_DIR not in sys.path:
     sys.path.insert(0, SERVER_DIR)
 
 import auth  # noqa: E402
-from db import Base  # noqa: E402
-from models import APIKey, User  # noqa: E402
+from db import Base, get_db  # noqa: E402
+from models import APIKey, RequestLog, User  # noqa: E402
 from routers import auth as auth_router  # noqa: E402
 
 
@@ -29,7 +31,11 @@ def _request() -> Request:
 
 @pytest.fixture
 def session():
-    engine = create_engine("sqlite+pysqlite:///:memory:")
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     Base.metadata.create_all(engine)
     with Session(engine) as database:
         yield database
@@ -207,6 +213,65 @@ def test_me_returns_additive_safe_credential_descriptor():
     assert payload["credential"]["label"] == "opencode-devbox"
     assert "key" not in payload["credential"]
     assert "hash" not in payload["credential"]
+
+
+def test_auth_me_never_discloses_presented_key_or_hash_in_http_or_request_log(
+    session,
+    monkeypatch,
+):
+    monkeypatch.setattr(auth, "ADMIN_API_KEY", "")
+    monkeypatch.setattr(auth, "AUTH_DISABLED", False)
+    user = _user()
+    presented = "m0sk_http_boundary_secret"
+    stored_hash = auth.pwd_context.hash(presented)
+    session.add_all(
+        [
+            user,
+            APIKey(
+                id=uuid.uuid4(),
+                key_prefix=presented[:12],
+                key_hash=stored_hash,
+                label="codex-devbox",
+                created_by=user.id,
+            ),
+        ]
+    )
+    session.commit()
+    captured_logs: list[RequestLog] = []
+    app = FastAPI()
+
+    @app.middleware("http")
+    async def capture_request_log(request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = "unit-test-request"
+        captured_logs.append(
+            RequestLog(
+                method=request.method,
+                path=request.url.path,
+                status_code=response.status_code,
+                latency_ms=0,
+                auth_type=getattr(request.state, "auth_type", "none"),
+            )
+        )
+        return response
+
+    app.include_router(auth_router.router)
+    app.dependency_overrides[get_db] = lambda: session
+
+    response = TestClient(app).get(
+        "/auth/me",
+        headers={"X-API-Key": presented},
+    )
+    serialized_response = f"{response.text}\n{dict(response.headers)}"
+    serialized_log = repr(vars(captured_logs[0]))
+
+    assert response.status_code == 200
+    assert response.json()["credential"]["label"] == "codex-devbox"
+    assert presented not in serialized_response
+    assert stored_hash not in serialized_response
+    assert presented not in serialized_log
+    assert stored_hash not in serialized_log
+    assert captured_logs[0].auth_type == "api_key"
 
 
 def test_me_rejects_inconsistent_credential_descriptor():
