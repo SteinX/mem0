@@ -168,6 +168,50 @@ def test_disabled_descriptor_has_no_secret_fields(session, monkeypatch):
     }
 
 
+def test_client_api_key_cannot_manage_credentials():
+    request = _request()
+    request.state.credential = {
+        "kind": "core_api_key",
+        "id": str(uuid.uuid4()),
+        "label": "compromised-client",
+        "key_prefix": "m0sk_client_",
+    }
+
+    with pytest.raises(HTTPException) as captured:
+        anyio.run(
+            partial(
+                auth.require_credential_manager,
+                request,
+                user=_user(),
+            )
+        )
+
+    assert captured.value.status_code == 403
+    assert captured.value.detail == "Client API keys cannot manage credentials."
+
+
+@pytest.mark.parametrize("kind", ["session", "operator_static", "disabled"])
+def test_interactive_and_operator_credentials_can_manage_keys(kind):
+    request = _request()
+    request.state.credential = {
+        "kind": kind,
+        "id": None,
+        "label": None,
+        "key_prefix": None,
+    }
+    user = _user()
+
+    result = anyio.run(
+        partial(
+            auth.require_credential_manager,
+            request,
+            user=user,
+        )
+    )
+
+    assert result is user
+
+
 def test_revoked_api_key_is_rejected_without_descriptor(session, monkeypatch):
     monkeypatch.setattr(auth, "ADMIN_API_KEY", "")
     monkeypatch.setattr(auth, "AUTH_DISABLED", False)

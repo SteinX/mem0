@@ -220,6 +220,22 @@ async def require_auth(
     return user
 
 
+async def require_credential_manager(
+    request: Request,
+    user: User = Depends(require_auth),
+) -> User:
+    credential = getattr(request.state, "credential", None)
+    if (
+        isinstance(credential, dict)
+        and credential.get("kind") == "core_api_key"
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Client API keys cannot manage credentials.",
+        )
+    return user
+
+
 _BOOTSTRAP_ADMIN = User(
     id=uuid.UUID(int=0), name="admin_api_key", email="", password_hash="", role="admin", created_at=datetime.min.replace(tzinfo=timezone.utc),
 )
