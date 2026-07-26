@@ -7,7 +7,11 @@ from pydantic import BaseModel, StringConstraints
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from auth import generate_api_key, require_credential_manager
+from auth import (
+    api_key_display_label,
+    generate_api_key,
+    require_credential_manager,
+)
 from db import get_db
 from models import APIKey, User
 from schemas import MessageResponse
@@ -61,7 +65,7 @@ def list_keys(
     return [
         KeyListItem(
             id=str(k.id),
-            label=k.label,
+            label=api_key_display_label(k.label, k.key_prefix),
             key_prefix=k.key_prefix,
             created_at=k.created_at,
             last_used_at=k.last_used_at,

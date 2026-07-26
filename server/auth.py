@@ -125,6 +125,13 @@ def _mark_credential(
     }
 
 
+def api_key_display_label(label: str, key_prefix: str) -> str:
+    normalized = label.strip()
+    if normalized:
+        return normalized
+    return f"Legacy client key ({key_prefix}...)"
+
+
 def _get_default_user(db: Session) -> User | None:
     return db.scalar(select(User).order_by(User.created_at.asc()))
 
@@ -160,7 +167,10 @@ def _resolve_user_from_api_key(request: Request, key: str, db: Session) -> User:
                 request,
                 kind="core_api_key",
                 credential_id=str(candidate.id),
-                label=candidate.label,
+                label=api_key_display_label(
+                    candidate.label,
+                    candidate.key_prefix,
+                ),
                 key_prefix=candidate.key_prefix,
             )
             return user
@@ -225,10 +235,7 @@ async def require_credential_manager(
     user: User = Depends(require_auth),
 ) -> User:
     credential = getattr(request.state, "credential", None)
-    if (
-        isinstance(credential, dict)
-        and credential.get("kind") == "core_api_key"
-    ):
+    if isinstance(credential, dict) and credential.get("kind") == "core_api_key":
         raise HTTPException(
             status_code=403,
             detail="Client API keys cannot manage credentials.",
@@ -237,7 +244,12 @@ async def require_credential_manager(
 
 
 _BOOTSTRAP_ADMIN = User(
-    id=uuid.UUID(int=0), name="admin_api_key", email="", password_hash="", role="admin", created_at=datetime.min.replace(tzinfo=timezone.utc),
+    id=uuid.UUID(int=0),
+    name="admin_api_key",
+    email="",
+    password_hash="",
+    role="admin",
+    created_at=datetime.min.replace(tzinfo=timezone.utc),
 )
 
 

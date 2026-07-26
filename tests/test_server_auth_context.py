@@ -22,6 +22,7 @@ if SERVER_DIR not in sys.path:
 import auth  # noqa: E402
 from db import Base, get_db  # noqa: E402
 from models import APIKey, RequestLog, User  # noqa: E402
+from routers import api_keys as api_keys_router  # noqa: E402
 from routers import auth as auth_router  # noqa: E402
 
 
@@ -59,11 +60,7 @@ def _verify(
     bearer: str | None = None,
     api_key: str | None = None,
 ):
-    credentials = (
-        HTTPAuthorizationCredentials(scheme="Bearer", credentials=bearer)
-        if bearer is not None
-        else None
-    )
+    credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=bearer) if bearer is not None else None
     return anyio.run(
         partial(
             auth.verify_auth,
@@ -112,6 +109,38 @@ def test_api_key_reports_the_exact_hash_matched_descriptor(session, monkeypatch)
     }
     assert presented not in str(request.state.credential)
     assert matched.key_hash not in str(request.state.credential)
+
+
+def test_legacy_empty_api_key_label_gets_a_stable_safe_descriptor(
+    session,
+    monkeypatch,
+):
+    monkeypatch.setattr(auth, "ADMIN_API_KEY", "")
+    monkeypatch.setattr(auth, "AUTH_DISABLED", False)
+    user = _user()
+    presented = "m0sk_legacy_empty_label_secret"
+    key_prefix = presented[:12]
+    session.add_all(
+        [
+            user,
+            APIKey(
+                id=uuid.uuid4(),
+                key_prefix=key_prefix,
+                key_hash=auth.pwd_context.hash(presented),
+                label="",
+                created_by=user.id,
+            ),
+        ]
+    )
+    session.commit()
+    request = _request()
+
+    resolved = _verify(request, session, api_key=presented)
+    response = auth_router.me(request, resolved)
+
+    expected = f"Legacy client key ({key_prefix}...)"
+    assert request.state.credential["label"] == expected
+    assert response.credential.label == expected
 
 
 def test_operator_static_descriptor_never_derives_a_prefix(session, monkeypatch):
@@ -210,6 +239,47 @@ def test_interactive_and_operator_credentials_can_manage_keys(kind):
     )
 
     assert result is user
+
+
+def test_client_api_key_cannot_manage_credentials_over_http(
+    session,
+    monkeypatch,
+):
+    monkeypatch.setattr(auth, "ADMIN_API_KEY", "")
+    monkeypatch.setattr(auth, "AUTH_DISABLED", False)
+    user = _user()
+    presented = "m0sk_client_cannot_rotate_credentials"
+    session.add_all(
+        [
+            user,
+            APIKey(
+                id=uuid.uuid4(),
+                key_prefix=presented[:12],
+                key_hash=auth.pwd_context.hash(presented),
+                label="restricted-client",
+                created_by=user.id,
+            ),
+        ]
+    )
+    session.commit()
+    app = FastAPI()
+    app.include_router(api_keys_router.router)
+    app.dependency_overrides[get_db] = lambda: session
+    client = TestClient(app)
+    headers = {"X-API-Key": presented}
+
+    responses = [
+        client.get("/api-keys", headers=headers),
+        client.post(
+            "/api-keys",
+            headers=headers,
+            json={"label": "unauthorized-child"},
+        ),
+        client.delete(f"/api-keys/{uuid.uuid4()}", headers=headers),
+    ]
+
+    assert [response.status_code for response in responses] == [403, 403, 403]
+    assert all(response.json()["detail"] == "Client API keys cannot manage credentials." for response in responses)
 
 
 def test_revoked_api_key_is_rejected_without_descriptor(session, monkeypatch):
