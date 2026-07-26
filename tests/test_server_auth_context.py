@@ -6,7 +6,7 @@ from functools import partial
 
 import anyio
 import pytest
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -219,6 +219,56 @@ def test_client_api_key_cannot_manage_credentials():
     assert captured.value.detail == "Client API keys cannot manage credentials."
 
 
+def test_client_api_key_cannot_access_operator_dependency():
+    request = _request()
+    request.state.auth_type = "api_key"
+    request.state.credential = {
+        "kind": "core_api_key",
+        "id": str(uuid.uuid4()),
+        "label": "restricted-client",
+        "key_prefix": "m0sk_client_",
+    }
+
+    with pytest.raises(HTTPException) as captured:
+        anyio.run(
+            partial(
+                auth.require_admin,
+                request,
+                user=_user(),
+                db=None,
+            )
+        )
+
+    assert captured.value.status_code == 403
+    assert captured.value.detail == (
+        "Client API keys cannot access operator endpoints."
+    )
+
+
+def test_client_api_key_cannot_modify_account_dependency():
+    request = _request()
+    request.state.credential = {
+        "kind": "core_api_key",
+        "id": str(uuid.uuid4()),
+        "label": "restricted-client",
+        "key_prefix": "m0sk_client_",
+    }
+
+    with pytest.raises(HTTPException) as captured:
+        anyio.run(
+            partial(
+                auth.require_account_user,
+                request,
+                user=_user(),
+            )
+        )
+
+    assert captured.value.status_code == 403
+    assert captured.value.detail == (
+        "Client API keys cannot modify account settings."
+    )
+
+
 @pytest.mark.parametrize("kind", ["session", "operator_static", "disabled"])
 def test_interactive_and_operator_credentials_can_manage_keys(kind):
     request = _request()
@@ -280,6 +330,64 @@ def test_client_api_key_cannot_manage_credentials_over_http(
 
     assert [response.status_code for response in responses] == [403, 403, 403]
     assert all(response.json()["detail"] == "Client API keys cannot manage credentials." for response in responses)
+
+
+def test_admin_owned_client_api_key_cannot_use_operator_or_account_routes(
+    session,
+    monkeypatch,
+):
+    monkeypatch.setattr(auth, "ADMIN_API_KEY", "")
+    monkeypatch.setattr(auth, "AUTH_DISABLED", False)
+    user = _user()
+    presented = "m0sk_client_cannot_operate_control_plane"
+    session.add_all(
+        [
+            user,
+            APIKey(
+                id=uuid.uuid4(),
+                key_prefix=presented[:12],
+                key_hash=auth.pwd_context.hash(presented),
+                label="restricted-client",
+                created_by=user.id,
+            ),
+        ]
+    )
+    session.commit()
+    app = FastAPI()
+
+    @app.post("/operator")
+    def operator_route(_user: User = Depends(auth.require_admin)):
+        return {"ok": True}
+
+    app.include_router(auth_router.router)
+    app.dependency_overrides[get_db] = lambda: session
+    client = TestClient(app)
+    headers = {"X-API-Key": presented}
+
+    responses = [
+        client.post("/operator", headers=headers),
+        client.patch(
+            "/auth/me",
+            headers=headers,
+            json={"name": "renamed-by-client-key"},
+        ),
+        client.post(
+            "/auth/onboarding-complete",
+            headers=headers,
+            json={"use_case": "unauthorized telemetry mutation"},
+        ),
+    ]
+
+    assert [response.status_code for response in responses] == [403, 403, 403]
+    assert responses[0].json()["detail"] == (
+        "Client API keys cannot access operator endpoints."
+    )
+    assert all(
+        response.json()["detail"]
+        == "Client API keys cannot modify account settings."
+        for response in responses[1:]
+    )
+    assert session.get(User, user.id).name == "Root"
 
 
 def test_non_admin_session_cannot_manage_credentials_over_http(

@@ -15,6 +15,7 @@ from auth import (
     decode_token,
     dummy_verify_password,
     hash_password,
+    require_account_user,
     require_auth,
     verify_password,
 )
@@ -237,7 +238,7 @@ def me(request: Request, user: User = Depends(require_auth)):
 @router.patch("/me", response_model=UserResponse)
 def update_me(
     body: UpdateProfileRequest,
-    user: User = Depends(require_auth),
+    user: User = Depends(require_account_user),
     db: Session = Depends(get_db),
 ):
     if body.name is not None and body.name.strip():
@@ -257,7 +258,7 @@ def update_me(
 @router.post("/change-password", response_model=MessageResponse)
 def change_password(
     body: ChangePasswordRequest,
-    user: User = Depends(require_auth),
+    user: User = Depends(require_account_user),
     db: Session = Depends(get_db),
 ):
     if not verify_password(body.current_password, user.password_hash):
@@ -271,7 +272,10 @@ def change_password(
 
 
 @router.post("/onboarding-complete", response_model=MessageResponse)
-def onboarding_complete(body: OnboardingCompleteRequest, user: User = Depends(require_auth)):
+def onboarding_complete(
+    body: OnboardingCompleteRequest,
+    user: User = Depends(require_account_user),
+):
     """Fire the one-shot telemetry event after the setup wizard reaches its success state."""
     capture_onboarding_completed(email=user.email, use_case=body.use_case)
     return MessageResponse(message="Onboarding completed.")
