@@ -89,7 +89,7 @@ def consume_refresh_jti(jti: str, db: Session) -> None:
         )
         .values(used_at=now)
     )
-    if result.rowcount == 0:
+    if getattr(result, "rowcount", 0) == 0:
         raise HTTPException(status_code=401, detail="Refresh token is no longer valid.")
     db.commit()
 
@@ -109,6 +109,22 @@ def _mark_auth_type(request: Request, auth_type: str) -> None:
     request.state.auth_type = auth_type
 
 
+def _mark_credential(
+    request: Request,
+    *,
+    kind: str,
+    credential_id: str | None = None,
+    label: str | None = None,
+    key_prefix: str | None = None,
+) -> None:
+    request.state.credential = {
+        "kind": kind,
+        "id": credential_id,
+        "label": label,
+        "key_prefix": key_prefix,
+    }
+
+
 def _get_default_user(db: Session) -> User | None:
     return db.scalar(select(User).order_by(User.created_at.asc()))
 
@@ -117,13 +133,17 @@ def _resolve_user_from_jwt(token: str, db: Session) -> User:
     payload = decode_token(token)
     if payload.get("type") != "access":
         raise HTTPException(status_code=401, detail="Invalid token type.")
-    user = db.get(User, payload.get("sub"))
+    try:
+        user_id = uuid.UUID(str(payload.get("sub")))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid token subject.") from None
+    user = db.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=401, detail="User not found.")
     return user
 
 
-def _resolve_user_from_api_key(key: str, db: Session) -> User:
+def _resolve_user_from_api_key(request: Request, key: str, db: Session) -> User:
     prefix = key[:12] if len(key) >= 12 else key
     candidates = (
         db.execute(select(APIKey).where(APIKey.key_prefix == prefix, APIKey.revoked_at.is_(None))).scalars().all()
@@ -131,11 +151,18 @@ def _resolve_user_from_api_key(key: str, db: Session) -> User:
 
     for candidate in candidates:
         if verify_api_key_hash(key, candidate.key_hash):
-            candidate.last_used_at = datetime.now(timezone.utc)
-            db.commit()
             user = db.get(User, candidate.created_by)
             if user is None:
                 raise HTTPException(status_code=401, detail="API key owner not found.")
+            candidate.last_used_at = datetime.now(timezone.utc)
+            db.commit()
+            _mark_credential(
+                request,
+                kind="core_api_key",
+                credential_id=str(candidate.id),
+                label=candidate.label,
+                key_prefix=candidate.key_prefix,
+            )
             return user
 
     raise HTTPException(status_code=401, detail="Invalid API key.")
@@ -150,17 +177,25 @@ async def verify_auth(
     """Authenticate via JWT, X-API-Key, or legacy ADMIN_API_KEY. Returns User or None."""
     if credentials is not None:
         _mark_auth_type(request, "bearer")
-        return _resolve_user_from_jwt(credentials.credentials, db)
+        user = _resolve_user_from_jwt(credentials.credentials, db)
+        _mark_credential(request, kind="session")
+        return user
 
     if x_api_key is not None:
         if ADMIN_API_KEY and secrets.compare_digest(x_api_key, ADMIN_API_KEY):
             _mark_auth_type(request, "admin_api_key")
+            _mark_credential(
+                request,
+                kind="operator_static",
+                label="Legacy admin API key",
+            )
             return None
         _mark_auth_type(request, "api_key")
-        return _resolve_user_from_api_key(x_api_key, db)
+        return _resolve_user_from_api_key(request, x_api_key, db)
 
     if AUTH_DISABLED:
         _mark_auth_type(request, "disabled")
+        _mark_credential(request, kind="disabled")
         return None
 
     raise HTTPException(
