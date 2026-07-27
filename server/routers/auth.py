@@ -1,8 +1,9 @@
 import uuid
 from datetime import datetime, timezone
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, TypeAdapter, ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -14,6 +15,7 @@ from auth import (
     decode_token,
     dummy_verify_password,
     hash_password,
+    require_account_user,
     require_auth,
     verify_password,
 )
@@ -81,6 +83,56 @@ class UserResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class SessionCredentialResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kind: Literal["session"]
+    id: None = None
+    label: None = None
+    key_prefix: None = None
+
+
+class CoreApiKeyCredentialResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kind: Literal["core_api_key"]
+    id: uuid.UUID
+    label: str = Field(min_length=1, max_length=255)
+    key_prefix: str = Field(min_length=1, max_length=12)
+
+
+class OperatorStaticCredentialResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kind: Literal["operator_static"]
+    id: None = None
+    label: Literal["Legacy admin API key"]
+    key_prefix: None = None
+
+
+class DisabledCredentialResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kind: Literal["disabled"]
+    id: None = None
+    label: None = None
+    key_prefix: None = None
+
+
+CredentialResponse = Annotated[
+    SessionCredentialResponse
+    | CoreApiKeyCredentialResponse
+    | OperatorStaticCredentialResponse
+    | DisabledCredentialResponse,
+    Field(discriminator="kind"),
+]
+_CREDENTIAL_ADAPTER = TypeAdapter(CredentialResponse)
+
+
+class AuthMeResponse(UserResponse):
+    credential: CredentialResponse
+
+
 class SetupStatusResponse(BaseModel):
     needsSetup: bool
 
@@ -97,7 +149,7 @@ def register(request: Request, body: RegisterRequest, db: Session = Depends(get_
     """Create the first admin account. Blocked once any user exists."""
     _require_password_length(body.password)
 
-    if db.scalar(select(func.count(User.id))) > 0:
+    if (db.scalar(select(func.count(User.id))) or 0) > 0:
         raise HTTPException(status_code=403, detail="Registration is closed. An admin account already exists.")
 
     user = User(
@@ -164,15 +216,29 @@ def refresh(request: Request, body: RefreshRequest, db: Session = Depends(get_db
     )
 
 
-@router.get("/me", response_model=UserResponse)
-def me(user: User = Depends(require_auth)):
-    return user
+@router.get("/me", response_model=AuthMeResponse)
+def me(request: Request, user: User = Depends(require_auth)):
+    credential = getattr(request.state, "credential", None)
+    if not isinstance(credential, dict):
+        raise HTTPException(status_code=500, detail="Authentication context is unavailable.")
+    try:
+        credential_response = _CREDENTIAL_ADAPTER.validate_python(credential)
+    except ValidationError as exc:
+        raise HTTPException(status_code=500, detail="Authentication context is unavailable.") from exc
+    return AuthMeResponse(
+        id=user.id,
+        name=user.name,
+        email=user.email,
+        role=user.role,
+        created_at=user.created_at,
+        credential=credential_response,
+    )
 
 
 @router.patch("/me", response_model=UserResponse)
 def update_me(
     body: UpdateProfileRequest,
-    user: User = Depends(require_auth),
+    user: User = Depends(require_account_user),
     db: Session = Depends(get_db),
 ):
     if body.name is not None and body.name.strip():
@@ -192,7 +258,7 @@ def update_me(
 @router.post("/change-password", response_model=MessageResponse)
 def change_password(
     body: ChangePasswordRequest,
-    user: User = Depends(require_auth),
+    user: User = Depends(require_account_user),
     db: Session = Depends(get_db),
 ):
     if not verify_password(body.current_password, user.password_hash):
@@ -206,7 +272,10 @@ def change_password(
 
 
 @router.post("/onboarding-complete", response_model=MessageResponse)
-def onboarding_complete(body: OnboardingCompleteRequest, user: User = Depends(require_auth)):
+def onboarding_complete(
+    body: OnboardingCompleteRequest,
+    user: User = Depends(require_account_user),
+):
     """Fire the one-shot telemetry event after the setup wizard reaches its success state."""
     capture_onboarding_completed(email=user.email, use_case=body.use_case)
     return MessageResponse(message="Onboarding completed.")

@@ -25,7 +25,7 @@ _SERVER_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "server")
 if _SERVER_DIR not in sys.path:
     sys.path.insert(0, _SERVER_DIR)
 
-from auth import require_auth  # noqa: E402
+from auth import require_credential_manager  # noqa: E402
 from db import get_db  # noqa: E402
 from models import User  # noqa: E402
 from routers import api_keys as api_keys_router  # noqa: E402
@@ -53,7 +53,7 @@ def client():
     app.include_router(api_keys_router.router)
 
     fake_user = User(id=uuid.uuid4(), name="t", email="t@e.com", password_hash="x", role="admin")
-    app.dependency_overrides[require_auth] = lambda: fake_user
+    app.dependency_overrides[require_credential_manager] = lambda: fake_user
     app.dependency_overrides[get_db] = lambda: _RaisingSession()
 
     return TestClient(app, raise_server_exceptions=False)
@@ -67,3 +67,14 @@ def test_revoke_malformed_key_id_returns_404(client):
 def test_revoke_missing_valid_uuid_returns_404(client):
     resp = client.delete(f"/api-keys/{uuid.uuid4()}")
     assert resp.status_code == 404
+
+
+@pytest.mark.parametrize("label", ["", "   ", "x" * 256])
+def test_create_rejects_labels_outside_descriptor_contract(client, label):
+    resp = client.post("/api-keys", json={"label": label})
+    assert resp.status_code == 422
+
+
+def test_create_request_trims_label():
+    request = api_keys_router.CreateKeyRequest(label="  codex-devbox  ")
+    assert request.label == "codex-devbox"
