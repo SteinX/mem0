@@ -182,7 +182,39 @@ curl -X POST http://localhost:8888/memories \
   }'
 ```
 
-Per-user keys inherit the creating user's scope. List or revoke them via `GET /api-keys` and `DELETE /api-keys/{id}`.
+Per-user keys inherit the creating user's scope. `GET /auth/me` accepts the
+key and returns the owning user plus a safe `credential` descriptor:
+
+```json
+{
+  "id": "3e7a1c81-4c3b-4bfa-bff8-248a02b8724d",
+  "name": "Admin",
+  "email": "admin@example.com",
+  "role": "admin",
+  "created_at": "2026-07-27T00:00:00Z",
+  "credential": {
+    "kind": "core_api_key",
+    "id": "bbfef730-0bc5-49c4-a6b8-6460192c93dd",
+    "label": "codex-devbox",
+    "key_prefix": "m0sk_example"
+  }
+}
+```
+
+The descriptor never includes the full key or its password hash. Its `kind`
+identifies how the request was authenticated:
+
+| `kind` | `id` | `label` | `key_prefix` |
+|---|---|---|---|
+| `session` | `null` | `null` | `null` |
+| `core_api_key` | API key UUID | Configured label | First 12 characters |
+| `operator_static` | `null` | `Legacy admin API key` | `null` |
+| `disabled` | `null` | `null` | `null` |
+
+Client API keys are data-plane credentials. Even when their owner is an
+admin, they receive `403` from account mutation and API-key management
+routes. Use an admin dashboard session or the legacy operator credential for
+those control-plane operations.
 
 ### Legacy `ADMIN_API_KEY`
 
@@ -281,18 +313,19 @@ The OSS REST server exposes the following endpoints. None use the `/v1/` prefix.
 | `POST` | `/auth/register` | Register the first admin. Registration closes after the first admin is created; additional accounts are provisioned by the existing admin. |
 | `POST` | `/auth/login` | Exchange email and password for access and refresh JWTs |
 | `POST` | `/auth/refresh` | Exchange a refresh token for a new access token |
-| `GET` | `/auth/me` | Get the current authenticated user (JWT required) |
-| `PATCH` | `/auth/me` | Update the caller's name or email. 409 if the new email is already in use |
+| `GET` | `/auth/me` | Get the authenticated user and safe credential descriptor |
+| `PATCH` | `/auth/me` | Update the caller's name or email. Named client keys receive 403; duplicate email returns 409 |
 | `POST` | `/auth/change-password` | Change the caller's password. 401 if the current password is wrong; new password must be at least 8 characters |
 
 ### API keys
 
-All `/api-keys` endpoints require a JWT.
+All `/api-keys` endpoints require an admin session or legacy operator
+credential. Non-admin sessions and named client API keys receive `403`.
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/api-keys` | List the caller's API keys |
-| `POST` | `/api-keys` | Create a new key; the full `m0sk_...` value is returned once |
+| `POST` | `/api-keys` | Create a new key; labels are trimmed and must contain 1–255 characters (422 otherwise); the full `m0sk_...` value is returned once |
 | `DELETE` | `/api-keys/{id}` | Revoke an API key |
 
 ### Request logs
