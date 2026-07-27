@@ -303,6 +303,7 @@ def test_non_admin_session_cannot_manage_credentials_over_http(
 ):
     monkeypatch.setattr(auth, "ADMIN_API_KEY", "")
     monkeypatch.setattr(auth, "AUTH_DISABLED", False)
+    monkeypatch.setattr(auth, "JWT_SECRET", "test-only-jwt-secret")
     user = _user()
     user.role = "member"
     session.add(user)
