@@ -6,6 +6,9 @@ from functools import partial
 
 import anyio
 import pytest
+
+pytest.importorskip("fastapi", reason="fastapi not installed")
+
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 from fastapi.testclient import TestClient
