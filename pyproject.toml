@@ -146,6 +146,10 @@ dependencies = [
   "slowapi>=0.1.9,<1.0",
 ]
 
+[tool.hatch.envs.default.env-vars]
+AUTH_DISABLED = "true"
+JWT_SECRET = "hatch-test-only-secret"
+
 [tool.hatch.envs.default.scripts]
 format = [
     "ruff format",

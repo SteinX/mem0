@@ -63,11 +63,10 @@ def _load_app(env_overrides: dict):
         **env_overrides,
     }
     with patch.dict(os.environ, overrides, clear=False):
-        import auth as server_auth
-        import db as server_db
-        import main as server_main
-
+        server_auth = importlib.import_module("auth")
+        server_db = importlib.import_module("db")
         importlib.reload(server_auth)
+        server_main = importlib.import_module("main")
         importlib.reload(server_main)
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
@@ -89,6 +88,19 @@ def _load_app(env_overrides: dict):
     server_main.app.dependency_overrides[server_db.get_db] = override_get_db
     server_main.app.state.test_engine = engine
     return server_main.app
+
+
+@pytest.fixture(autouse=True)
+def _restore_auth_defaults():
+    yield
+    overrides = {
+        "ADMIN_API_KEY": "",
+        "AUTH_DISABLED": "true",
+        "JWT_SECRET": "test-only-jwt-secret",
+    }
+    with patch.dict(os.environ, overrides, clear=False):
+        server_auth = importlib.import_module("auth")
+        importlib.reload(server_auth)
 
 
 # ---------------------------------------------------------------------------
