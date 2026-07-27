@@ -5,7 +5,14 @@ import time
 from typing import Any, Dict, List, Optional
 
 import telemetry
-from auth import ADMIN_API_KEY, AUTH_DISABLED, JWT_SECRET, require_admin, verify_auth
+from auth import (
+    ADMIN_API_KEY,
+    AUTH_DISABLED,
+    JWT_SECRET,
+    reject_client_api_key,
+    require_admin,
+    verify_auth,
+)
 from db import SessionLocal
 from dotenv import load_dotenv
 from errors import (
@@ -407,7 +414,16 @@ def _read_all_memories_limit() -> int:
 
 
 ALL_MEMORIES_LIMIT = _read_all_memories_limit()
-_RESERVED_PAYLOAD_KEYS = {"data", "user_id", "agent_id", "run_id", "hash", "created_at", "updated_at", "expiration_date"}
+_RESERVED_PAYLOAD_KEYS = {
+    "data",
+    "user_id",
+    "agent_id",
+    "run_id",
+    "hash",
+    "created_at",
+    "updated_at",
+    "expiration_date",
+}
 
 
 def _serialize_memory(row: Any) -> Dict[str, Any]:
@@ -445,14 +461,16 @@ def get_all_memories(
     """Retrieve stored memories. Lists all memories when no identifier is provided (admin only)."""
     try:
         if not any([user_id, run_id, agent_id]):
+            reject_client_api_key(
+                request,
+                "Client API keys cannot list all memories.",
+            )
             auth_type = getattr(request.state, "auth_type", "none")
             if _auth is not None and _auth.role != "admin" and auth_type not in {"admin_api_key", "disabled"}:
                 raise HTTPException(status_code=403, detail="Admin role required to list all memories.")
             # Admin all-memory listing is intentionally raw; scoped get_all below applies expiry visibility.
             return _list_all_memories(limit=top_k if top_k is not None else ALL_MEMORIES_LIMIT)
-        filters = {
-            k: v for k, v in {"user_id": user_id, "run_id": run_id, "agent_id": agent_id}.items() if v
-        }
+        filters = {k: v for k, v in {"user_id": user_id, "run_id": run_id, "agent_id": agent_id}.items() if v}
         params = {"filters": filters}
         if top_k is not None:
             params["top_k"] = top_k
@@ -559,9 +577,7 @@ def delete_all_memories(
     if not any([user_id, run_id, agent_id]):
         raise HTTPException(status_code=400, detail="At least one identifier is required.")
     try:
-        params = {
-            k: v for k, v in {"user_id": user_id, "run_id": run_id, "agent_id": agent_id}.items() if v
-        }
+        params = {k: v for k, v in {"user_id": user_id, "run_id": run_id, "agent_id": agent_id}.items() if v}
         get_memory_instance().delete_all(**params)
         return MessageResponse(message="All relevant memories deleted")
     except Exception:

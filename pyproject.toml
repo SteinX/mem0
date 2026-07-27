@@ -132,6 +132,18 @@ features = [
 features = [
   "dev",
   "test",
+  "vector-stores",
+  "llms",
+  "extras",
+]
+dependencies = [
+  "fastapi>=0.115.8,<1.0",
+  "pydantic[email]>=2.10.4",
+  "python-dotenv>=1.0,<2.0",
+  "passlib[bcrypt]>=1.7,<2.0",
+  "bcrypt==4.0.1",
+  "python-jose[cryptography]>=3.3,<4.0",
+  "slowapi>=0.1.9,<1.0",
 ]
 
 [tool.hatch.envs.default.scripts]

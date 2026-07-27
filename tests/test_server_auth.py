@@ -2,7 +2,7 @@
 
 Tests the actual server/main.py app through FastAPI's TestClient (full ASGI
 round-trip) covering:
-  - Auth disabled mode (ADMIN_API_KEY unset)
+  - Auth disabled mode (AUTH_DISABLED=true)
   - Auth enabled mode (ADMIN_API_KEY set)
   - Edge cases: empty keys, near-miss keys, timing-safe comparison, header
     casing, response headers, startup logging, and full CRUD flows through auth.
@@ -11,6 +11,7 @@ round-trip) covering:
 import importlib
 import logging
 import os
+import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -18,11 +19,19 @@ import pytest
 pytest.importorskip("fastapi", reason="fastapi not installed")
 
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+SERVER_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "server")
+if SERVER_DIR not in sys.path:
+    sys.path.insert(0, SERVER_DIR)
 
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def _mock_memory():
@@ -48,10 +57,37 @@ def _mock_memory():
 
 def _load_app(env_overrides: dict):
     """Reload server/main.py with the given environment and return the FastAPI app."""
-    import server.main as server_main
+    overrides = {
+        "AUTH_DISABLED": "false",
+        "JWT_SECRET": "test-only-jwt-secret",
+        **env_overrides,
+    }
+    with patch.dict(os.environ, overrides, clear=False):
+        import auth as server_auth
+        import db as server_db
+        import main as server_main
 
-    with patch.dict(os.environ, env_overrides, clear=False):
+        importlib.reload(server_auth)
         importlib.reload(server_main)
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    server_db.Base.metadata.create_all(engine)
+    testing_session = sessionmaker(
+        bind=engine,
+        autoflush=False,
+        expire_on_commit=False,
+    )
+
+    def override_get_db():
+        with testing_session() as database:
+            yield database
+
+    server_main.SessionLocal = testing_session
+    server_main.app.dependency_overrides[server_db.get_db] = override_get_db
+    server_main.app.state.test_engine = engine
     return server_main.app
 
 
@@ -59,12 +95,18 @@ def _load_app(env_overrides: dict):
 # Auth disabled (ADMIN_API_KEY not set)
 # ---------------------------------------------------------------------------
 
+
 class TestAuthDisabled:
     """All endpoints should be freely accessible when ADMIN_API_KEY is empty."""
 
     @pytest.fixture(autouse=True)
     def _setup(self, _mock_memory):
-        self.app = _load_app({"ADMIN_API_KEY": ""})
+        self.app = _load_app(
+            {
+                "ADMIN_API_KEY": "",
+                "AUTH_DISABLED": "true",
+            }
+        )
         self.client = TestClient(self.app)
         self.mock = _mock_memory
 
@@ -83,7 +125,13 @@ class TestAuthDisabled:
         assert resp.status_code == 200
 
     def test_all_memories_limit_uses_env_override(self):
-        app = _load_app({"ADMIN_API_KEY": "", "MEM0_OSS_LIST_FETCH_LIMIT": "5000"})
+        app = _load_app(
+            {
+                "ADMIN_API_KEY": "",
+                "AUTH_DISABLED": "true",
+                "MEM0_OSS_LIST_FETCH_LIMIT": "5000",
+            }
+        )
         client = TestClient(app)
         self.mock.vector_store.list.return_value = [[]]
 
@@ -93,10 +141,13 @@ class TestAuthDisabled:
         self.mock.vector_store.list.assert_called_with(top_k=5000)
 
     def test_create_memory_without_key(self):
-        resp = self.client.post("/memories", json={
-            "messages": [{"role": "user", "content": "I like pizza"}],
-            "user_id": "alice",
-        })
+        resp = self.client.post(
+            "/memories",
+            json={
+                "messages": [{"role": "user", "content": "I like pizza"}],
+                "user_id": "alice",
+            },
+        )
         assert resp.status_code == 200
 
     def test_search_without_key(self):
@@ -128,12 +179,9 @@ class TestAuthDisabled:
         resp = self.client.post("/configure", json={"version": "v1.1"})
         assert resp.status_code == 200
 
-    def test_supplying_key_still_works_when_auth_disabled(self):
-        """A client that sends X-API-Key should not be penalized when auth is off."""
-        resp = self.client.get(
-            "/memories/mem-1", headers={"X-API-Key": "some-random-key"}
-        )
-        assert resp.status_code == 200
+    def test_invalid_supplied_key_is_rejected_when_auth_disabled(self):
+        resp = self.client.get("/memories/mem-1", headers={"X-API-Key": "some-random-key"})
+        assert resp.status_code == 401
 
     @pytest.mark.parametrize(
         "method,path",
@@ -158,6 +206,7 @@ class TestAuthDisabled:
 # ---------------------------------------------------------------------------
 # Auth enabled (ADMIN_API_KEY set)
 # ---------------------------------------------------------------------------
+
 
 class TestAuthEnabled:
     """All protected endpoints must enforce the API key."""
@@ -194,7 +243,7 @@ class TestAuthEnabled:
 
     def test_401_includes_www_authenticate_header(self):
         resp = self.client.get("/memories/mem-1")
-        assert resp.headers.get("www-authenticate") == "ApiKey"
+        assert resp.headers.get("www-authenticate") == "Bearer"
 
     def test_near_miss_key_rejected(self):
         """Key that differs by one character should be rejected."""
@@ -273,10 +322,14 @@ class TestAuthEnabled:
         assert resp.status_code == 200
 
     def test_create_memory_with_key(self):
-        resp = self._authed("POST", "/memories", json={
-            "messages": [{"role": "user", "content": "I like pizza"}],
-            "user_id": "alice",
-        })
+        resp = self._authed(
+            "POST",
+            "/memories",
+            json={
+                "messages": [{"role": "user", "content": "I like pizza"}],
+                "user_id": "alice",
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert "results" in data
@@ -314,6 +367,7 @@ class TestAuthEnabled:
 # Full CRUD flow through auth
 # ---------------------------------------------------------------------------
 
+
 class TestAuthenticatedCRUDFlow:
     """Verify a complete create → read → search → update → history → delete
     cycle works end-to-end through the auth layer."""
@@ -333,10 +387,14 @@ class TestAuthenticatedCRUDFlow:
 
     def test_full_crud_cycle(self):
         # 1. Create
-        resp = self._authed("POST", "/memories", json={
-            "messages": [{"role": "user", "content": "I love fresh vegetable pizza"}],
-            "user_id": "alice",
-        })
+        resp = self._authed(
+            "POST",
+            "/memories",
+            json={
+                "messages": [{"role": "user", "content": "I love fresh vegetable pizza"}],
+                "user_id": "alice",
+            },
+        )
         assert resp.status_code == 200
         self.mock.add.assert_called_once()
 
@@ -348,7 +406,10 @@ class TestAuthenticatedCRUDFlow:
         # 3. Read all
         resp = self._authed("GET", "/memories", params={"user_id": "alice"})
         assert resp.status_code == 200
-        self.mock.get_all.assert_called_once_with(user_id="alice")
+        self.mock.get_all.assert_called_once_with(
+            filters={"user_id": "alice"},
+            show_expired=False,
+        )
 
         # 4. Search
         resp = self._authed("POST", "/search", json={"query": "pizza", "user_id": "alice"})
@@ -378,9 +439,7 @@ class TestAuthenticatedCRUDFlow:
     def test_crud_flow_blocked_without_auth(self):
         """Same flow should fail at every step without the key."""
         endpoints = [
-            ("POST", "/memories", {"json": {
-                "messages": [{"role": "user", "content": "test"}], "user_id": "alice"
-            }}),
+            ("POST", "/memories", {"json": {"messages": [{"role": "user", "content": "test"}], "user_id": "alice"}}),
             ("GET", "/memories/mem-1", {}),
             ("GET", "/memories", {"params": {"user_id": "alice"}}),
             ("POST", "/search", {"json": {"query": "pizza", "user_id": "alice"}}),
@@ -407,6 +466,7 @@ class TestAuthenticatedCRUDFlow:
 # ---------------------------------------------------------------------------
 # Edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestAuthEdgeCases:
     """Boundary conditions and unusual inputs."""
@@ -436,15 +496,15 @@ class TestAuthEdgeCases:
         assert resp.status_code == 401
 
     def test_key_env_var_not_present_at_all(self):
-        """When the env var is completely absent, auth should be disabled."""
-        import server.main as server_main
-        env = os.environ.copy()
-        env.pop("ADMIN_API_KEY", None)
-        with patch.dict(os.environ, env, clear=True):
-            importlib.reload(server_main)
-        client = TestClient(server_main.app)
+        app = _load_app(
+            {
+                "ADMIN_API_KEY": "",
+                "AUTH_DISABLED": "false",
+            }
+        )
+        client = TestClient(app)
         resp = client.get("/memories/mem-1")
-        assert resp.status_code != 401
+        assert resp.status_code == 401
 
     def test_switching_from_enabled_to_disabled(self):
         """Simulates a server restart with auth toggled off."""
@@ -454,7 +514,12 @@ class TestAuthEdgeCases:
         assert c1.get("/memories/mem-1").status_code == 401
 
         # Then: auth disabled
-        app2 = _load_app({"ADMIN_API_KEY": ""})
+        app2 = _load_app(
+            {
+                "ADMIN_API_KEY": "",
+                "AUTH_DISABLED": "true",
+            }
+        )
         c2 = TestClient(app2)
         assert c2.get("/memories/mem-1").status_code != 401
 
@@ -483,6 +548,7 @@ class TestAuthEdgeCases:
 # Startup logging
 # ---------------------------------------------------------------------------
 
+
 class TestStartupLogging:
     """Verify the server emits the correct log messages at import time."""
 
@@ -492,13 +558,20 @@ class TestStartupLogging:
 
     def test_warning_when_auth_disabled(self, caplog):
         with caplog.at_level(logging.WARNING):
-            _load_app({"ADMIN_API_KEY": ""})
-        assert any("UNSECURED" in r.message for r in caplog.records)
+            _load_app(
+                {
+                    "ADMIN_API_KEY": "",
+                    "AUTH_DISABLED": "true",
+                }
+            )
+        assert any("AUTH_DISABLED is enabled" in r.message for r in caplog.records)
 
-    def test_info_when_auth_enabled(self, caplog):
+    def test_no_auth_warning_when_auth_enabled(self, caplog):
         with caplog.at_level(logging.INFO):
             _load_app({"ADMIN_API_KEY": "a-long-enough-secret-key"})
-        assert any("authentication enabled" in r.message for r in caplog.records)
+        messages = [record.message for record in caplog.records]
+        assert not any("AUTH_DISABLED is enabled" in message for message in messages)
+        assert not any("shorter than" in message for message in messages)
 
     def test_warning_when_key_too_short(self, caplog):
         with caplog.at_level(logging.WARNING):

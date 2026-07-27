@@ -230,7 +230,7 @@ async def require_auth(
     return user
 
 
-def _reject_client_api_key(request: Request, detail: str) -> None:
+def reject_client_api_key(request: Request, detail: str) -> None:
     credential = getattr(request.state, "credential", None)
     if isinstance(credential, dict) and credential.get("kind") == "core_api_key":
         raise HTTPException(status_code=403, detail=detail)
@@ -240,7 +240,7 @@ async def require_account_user(
     request: Request,
     user: User = Depends(require_auth),
 ) -> User:
-    _reject_client_api_key(
+    reject_client_api_key(
         request,
         "Client API keys cannot modify account settings.",
     )
@@ -251,7 +251,7 @@ async def require_credential_manager(
     request: Request,
     user: User = Depends(require_auth),
 ) -> User:
-    _reject_client_api_key(
+    reject_client_api_key(
         request,
         "Client API keys cannot manage credentials.",
     )
@@ -280,7 +280,7 @@ async def require_admin(
     ADMIN_API_KEY and AUTH_DISABLED callers are treated as admin even when
     the users table is empty (fresh-deploy bootstrap).
     """
-    _reject_client_api_key(
+    reject_client_api_key(
         request,
         "Client API keys cannot access operator endpoints.",
     )
