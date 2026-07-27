@@ -2,7 +2,7 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Any, Literal, Optional
 
-from auth import require_admin  # pyright: ignore[reportAttributeAccessIssue]
+from auth import require_admin
 from errors import upstream_error
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel

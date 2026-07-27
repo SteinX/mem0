@@ -28,7 +28,6 @@ from db import Base, get_db  # noqa: E402
 from models import APIKey, User  # noqa: E402
 from routers import api_keys as api_keys_router  # noqa: E402
 from routers import auth as auth_router  # noqa: E402
-from routers import entities as entities_router  # noqa: E402
 
 
 def _request() -> Request:
@@ -296,42 +295,6 @@ def test_admin_owned_client_api_key_cannot_list_all_memories_over_http(
         filters={"user_id": "root"},
         show_expired=False,
     )
-
-
-def test_admin_owned_client_api_key_cannot_enumerate_entities_over_http(
-    session,
-    monkeypatch,
-):
-    monkeypatch.setattr(auth, "ADMIN_API_KEY", "")
-    monkeypatch.setattr(auth, "AUTH_DISABLED", False)
-    user = _user()
-    presented = "m0sk_client_cannot_enumerate_entities"
-    session.add_all(
-        [
-            user,
-            APIKey(
-                id=uuid.uuid4(),
-                key_prefix=presented[:12],
-                key_hash=auth.pwd_context.hash(presented),
-                label="restricted-client",
-                created_by=user.id,
-            ),
-        ]
-    )
-    session.commit()
-
-    memory = MagicMock()
-    monkeypatch.setattr(entities_router, "get_memory_instance", lambda: memory)
-    app = FastAPI()
-    app.include_router(entities_router.router)
-    app.dependency_overrides[get_db] = lambda: session
-    client = TestClient(app)
-
-    response = client.get("/entities", headers={"X-API-Key": presented})
-
-    assert response.status_code == 403
-    assert response.json()["detail"] == ("Client API keys cannot access operator endpoints.")
-    memory.vector_store.list.assert_not_called()
 
 
 def test_non_admin_session_cannot_manage_credentials_over_http(

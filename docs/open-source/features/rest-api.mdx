@@ -212,9 +212,9 @@ identifies how the request was authenticated:
 | `disabled` | `null` | `null` | `null` |
 
 Client API keys are data-plane credentials. Even when their owner is an
-admin, they receive `403` from account mutation and API-key management
-routes. Use an admin dashboard session or the legacy operator credential for
-those control-plane operations.
+admin, they receive `403` from account mutation, API-key management, and
+store-wide inventory routes such as `GET /entities`. Use an admin dashboard
+session or the legacy operator credential for those control-plane operations.
 
 ### Legacy `ADMIN_API_KEY`
 
@@ -335,6 +335,9 @@ credential. Non-admin sessions and named client API keys receive `403`.
 | `GET` | `/requests?limit=N` | Recent API call log (JWT or admin key) |
 
 ### Entities
+
+All `/entities` endpoints require an admin session or legacy operator
+credential. Non-admin sessions and named client API keys receive `403`.
 
 | Method | Path | Description |
 |--------|------|-------------|
