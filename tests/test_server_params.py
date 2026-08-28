@@ -650,7 +650,7 @@ class TestGetMemories:
             params={
                 "user_id": "test_routing_user",
                 "_mem0_sidecar_mutation_id": marker,
-                "top_k": 1000,
+                "top_k": 5000,
                 "show_expired": True,
             },
         )
@@ -661,7 +661,7 @@ class TestGetMemories:
                 "user_id": "test_routing_user",
                 "_mem0_sidecar_mutation_id": marker,
             },
-            top_k=1000,
+            top_k=5000,
         )
         mock_memory.get_all.assert_not_called()
 
