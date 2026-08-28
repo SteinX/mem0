@@ -637,6 +637,56 @@ class TestGetMemories:
         assert kwargs["filters"] == {"user_id": "test_routing_user"}
         assert kwargs["top_k"] == 1000
 
+    def test_get_memories_exact_mutation_marker_bypasses_global_window(
+        self,
+        client,
+        mock_memory,
+    ):
+        marker = "a" * 64
+        mock_memory.vector_store.list.return_value = []
+
+        response = client.get(
+            "/memories",
+            params={
+                "user_id": "test_routing_user",
+                "_mem0_sidecar_mutation_id": marker,
+                "top_k": 1000,
+                "show_expired": True,
+            },
+        )
+
+        assert response.status_code == 200
+        mock_memory.vector_store.list.assert_called_once_with(
+            filters={
+                "user_id": "test_routing_user",
+                "_mem0_sidecar_mutation_id": marker,
+            },
+            top_k=1000,
+        )
+        mock_memory.get_all.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "marker",
+        ["a" * 63, "a" * 65, "g" * 64],
+    )
+    def test_get_memories_rejects_invalid_mutation_marker(
+        self,
+        client,
+        mock_memory,
+        marker,
+    ):
+        response = client.get(
+            "/memories",
+            params={
+                "user_id": "test_routing_user",
+                "_mem0_sidecar_mutation_id": marker,
+            },
+        )
+
+        assert response.status_code == 422
+        mock_memory.vector_store.list.assert_not_called()
+        mock_memory.get_all.assert_not_called()
+
     def test_get_memories_admin_top_k_zero_not_defaulted(self, client, mock_memory):
         mock_memory.vector_store.list.return_value = []
 
