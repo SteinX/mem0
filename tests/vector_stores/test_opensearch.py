@@ -312,6 +312,32 @@ class TestOpenSearchDB(unittest.TestCase):
         self.assertEqual(len(result[0]), 1)
         self.assertEqual(result[0][0].id, "id1")
 
+    def test_list_pushes_mutation_marker_into_provider_filter(self):
+        marker = "a" * 64
+        self.client_mock.search.return_value = {"hits": {"hits": []}}
+
+        self.os_db.list(
+            filters={
+                "user_id": "alice",
+                "_mem0_sidecar_mutation_id": marker,
+            },
+            top_k=1000,
+        )
+
+        query = self.client_mock.search.call_args.kwargs["body"]
+        self.assertEqual(
+            query["query"]["bool"]["filter"],
+            [
+                {"term": {"payload.user_id.keyword": "alice"}},
+                {
+                    "term": {
+                        "payload._mem0_sidecar_mutation_id.keyword": marker,
+                    }
+                },
+            ],
+        )
+        self.assertEqual(query["size"], 1000)
+
     @patch("mem0.vector_stores.opensearch.logger")
     def test_list_error_returns_nested_empty_list(self, mock_logger):
         """list() error path must return [[]] (not bare []) so callers can do

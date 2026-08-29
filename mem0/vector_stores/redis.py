@@ -23,6 +23,7 @@ DEFAULT_FIELDS = [
     {"name": "agent_id", "type": "tag"},
     {"name": "run_id", "type": "tag"},
     {"name": "user_id", "type": "tag"},
+    {"name": "_mem0_sidecar_mutation_id", "type": "tag"},
     {"name": "memory", "type": "text"},
     {"name": "metadata", "type": "text"},
     # TODO: Although it is numeric but also accepts string
@@ -135,7 +136,7 @@ class RedisDB(VectorStoreBase):
             }
 
             # Conditionally add optional fields
-            for field in ["agent_id", "run_id", "user_id"]:
+            for field in ["agent_id", "run_id", "user_id", "_mem0_sidecar_mutation_id"]:
                 if field in payload:
                     entry[field] = payload[field]
 
@@ -262,7 +263,7 @@ class RedisDB(VectorStoreBase):
         if vector is not None:
             data["embedding"] = np.array(vector, dtype=np.float32).tobytes()
 
-        for field in ["agent_id", "run_id", "user_id"]:
+        for field in ["agent_id", "run_id", "user_id", "_mem0_sidecar_mutation_id"]:
             if field in payload:
                 data[field] = payload[field]
 

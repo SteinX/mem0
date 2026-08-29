@@ -115,6 +115,40 @@ def test_list_with_filter_builds_query():
     assert query.query_string() == "@user_id:{alice}"
 
 
+def test_mutation_marker_is_indexed_and_filterable():
+    from mem0.vector_stores.redis import DEFAULT_FIELDS
+
+    marker = "a" * 64
+    assert {"name": "_mem0_sidecar_mutation_id", "type": "tag"} in DEFAULT_FIELDS
+
+    db, mock_index = _make_redis_db()
+    mock_index.search.return_value = MagicMock(docs=[])
+
+    db.list(filters={"_mem0_sidecar_mutation_id": marker})
+
+    query = mock_index.search.call_args[0][0]
+    assert query.query_string() == f"@_mem0_sidecar_mutation_id:{{{marker}}}"
+
+
+def test_insert_and_update_copy_mutation_marker_to_indexed_field():
+    db, mock_index = _make_redis_db()
+    marker = "b" * 64
+    payload = {
+        "data": "memory",
+        "user_id": "alice",
+        "_mem0_sidecar_mutation_id": marker,
+    }
+
+    db.insert(vectors=[[0.1, 0.2]], payloads=[payload], ids=["memory-1"])
+    inserted = mock_index.load.call_args.args[0][0]
+    assert inserted["_mem0_sidecar_mutation_id"] == marker
+
+    mock_index.reset_mock()
+    db.update(vector_id="memory-1", vector=None, payload=payload)
+    updated = mock_index.load.call_args.kwargs["data"][0]
+    assert updated["_mem0_sidecar_mutation_id"] == marker
+
+
 def test_create_col_keeps_distinct_dims_across_instances():
     """Building the schema for two collections with different embedding
     dimensions must keep them distinct. Regression: DEFAULT_FIELDS.copy() is a
