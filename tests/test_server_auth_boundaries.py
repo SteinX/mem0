@@ -1,6 +1,7 @@
 import os
 import sys
 import uuid
+from contextlib import nullcontext
 from datetime import datetime, timezone
 from functools import partial
 from unittest.mock import MagicMock
@@ -44,6 +45,11 @@ def session():
     Base.metadata.create_all(engine)
     with Session(engine) as database:
         yield database
+
+
+@pytest.fixture(autouse=True)
+def auth_session(session, monkeypatch):
+    monkeypatch.setattr(auth, "SessionLocal", lambda: nullcontext(session))
 
 
 def _user() -> User:
@@ -95,7 +101,6 @@ def test_client_api_key_cannot_access_operator_dependency():
                 auth.require_admin,
                 request,
                 user=_user(),
-                db=None,
             )
         )
 

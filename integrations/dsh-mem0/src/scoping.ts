@@ -1,0 +1,45 @@
+/**
+ * Per-call memory scoping.
+ *
+ * The plugin is mounted with one default `userId`, but a single harness install
+ * is bound to one configured user. Both tools accept an optional `runId`
+ * subscope, while the model cannot override the user tenant boundary.
+ *
+ * The two call sites need different key casing, and it is deliberate rather than
+ * incidental: search passes scope inside `filters`, sent to the platform raw, so
+ * it must be snake_case; add takes the entity params top-level, through the
+ * SDK's camel->snake converter, so it must be camelCase. Keeping the split
+ * explicit (like integrations/pi-agent-plugin/src/memory/scoping.ts) means the
+ * asymmetry is visible in the code, not load-bearing on a converter no-op.
+ */
+
+export interface EntityParams {
+  runId?: string;
+}
+
+const clean = (v: string | undefined) => v?.trim() || undefined;
+
+export type SearchFilters = Record<string, string>;
+
+export function resolveSearchFilters(
+  params: EntityParams,
+  defaultUserId: string,
+): SearchFilters {
+  const filters: SearchFilters = { user_id: defaultUserId };
+  const runId = clean(params.runId);
+  if (runId) filters.run_id = runId;
+  return filters;
+}
+
+/** Add: camelCase, top-level params run through the SDK's camel->snake converter. */
+export function resolveAddParams(
+  params: EntityParams,
+  defaultUserId: string,
+): Record<string, string> {
+  const out: Record<string, string> = {
+    userId: defaultUserId,
+  };
+  const runId = clean(params.runId);
+  if (runId) out.runId = runId;
+  return out;
+}

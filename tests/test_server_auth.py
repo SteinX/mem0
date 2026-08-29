@@ -84,7 +84,8 @@ def _load_app(env_overrides: dict):
         with testing_session() as database:
             yield database
 
-    server_main.SessionLocal = testing_session
+    setattr(server_auth, "SessionLocal", testing_session)
+    setattr(server_main, "SessionLocal", testing_session)
     server_main.app.dependency_overrides[server_db.get_db] = override_get_db
     server_main.app.state.test_engine = engine
     return server_main.app
@@ -151,6 +152,59 @@ class TestAuthDisabled:
 
         assert resp.status_code == 200
         self.mock.vector_store.list.assert_called_with(top_k=5000)
+
+    def test_mutation_marker_lookup_uses_its_own_bounded_limit(self):
+        app = _load_app(
+            {
+                "ADMIN_API_KEY": "",
+                "AUTH_DISABLED": "true",
+                "MEM0_OSS_LIST_FETCH_LIMIT": "50",
+            }
+        )
+        client = TestClient(app)
+        self.mock.vector_store.list.return_value = [[]]
+        marker = "a" * 64
+
+        resp = client.get(
+            "/memories",
+            params={
+                "user_id": "alice",
+                "top_k": 1000,
+                "_mem0_sidecar_mutation_id": marker,
+                "show_expired": "true",
+            },
+        )
+
+        assert resp.status_code == 200
+        self.mock.vector_store.list.assert_called_with(
+            filters={
+                "user_id": "alice",
+                "_mem0_sidecar_mutation_id": marker,
+            },
+            top_k=1000,
+        )
+
+    def test_mutation_marker_lookup_rejects_above_its_limit(self):
+        app = _load_app(
+            {
+                "ADMIN_API_KEY": "",
+                "AUTH_DISABLED": "true",
+                "MEM0_OSS_LIST_FETCH_LIMIT": "5000",
+            }
+        )
+        client = TestClient(app)
+
+        resp = client.get(
+            "/memories",
+            params={
+                "user_id": "alice",
+                "top_k": 1001,
+                "_mem0_sidecar_mutation_id": "a" * 64,
+            },
+        )
+
+        assert resp.status_code == 422
+        self.mock.vector_store.list.assert_not_called()
 
     def test_create_memory_without_key(self):
         resp = self.client.post(

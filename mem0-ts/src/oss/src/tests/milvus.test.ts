@@ -147,6 +147,38 @@ afterAll(() => {
   (console.warn as jest.Mock).mockRestore?.();
 });
 
+describe("Milvus optional peer loading", () => {
+  afterEach(() => {
+    jest.dontMock("@zilliz/milvus2-sdk-node");
+    jest.resetModules();
+  });
+
+  it("preserves a missing transitive SDK dependency", () => {
+    const error = Object.assign(
+      new Error("Cannot find module '@grpc/missing-runtime'"),
+      { code: "MODULE_NOT_FOUND" },
+    );
+    jest.doMock("@zilliz/milvus2-sdk-node", () => {
+      throw error;
+    });
+
+    let caught: unknown;
+    jest.isolateModules(() => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const {
+        Milvus: MilvusWithBrokenPeer,
+      } = require("../vector_stores/milvus");
+      try {
+        new MilvusWithBrokenPeer({ collectionName: "mem0" });
+      } catch (loadError) {
+        caught = loadError;
+      }
+    });
+
+    expect(caught).toBe(error);
+  });
+});
+
 describe("Milvus vector store (TS OSS SDK)", () => {
   function makeStore(client: FakeMilvusClient, overrides: any = {}) {
     return new Milvus({
@@ -265,6 +297,36 @@ describe("Milvus vector store (TS OSS SDK)", () => {
       payload: { data: "first" },
       score: 0.9,
     });
+  });
+
+  it("skips a wildcard '*' filter value and keeps the rest", async () => {
+    const client = new FakeMilvusClient({ existing: ["mem0"] });
+    client.searchResponse = { results: [] };
+    const store = makeStore(client, { metricType: "COSINE" });
+    await store.initialize();
+
+    // "*" means match-any: it must be dropped, not emitted as `== "*"` (which
+    // matches nothing), leaving only the real agent_id clause.
+    await store.search([0.1, 0.2, 0.3], 5, {
+      user_id: "*",
+      agent_id: "a1",
+    });
+
+    const searchCall = client.calls.find((c) => c.method === "search")!;
+    expect(searchCall.args.filter).toBe('(metadata["agent_id"] == "a1")');
+  });
+
+  it("omits the filter entirely when every value is a wildcard", async () => {
+    const client = new FakeMilvusClient({ existing: ["mem0"] });
+    const store = makeStore(client);
+    await store.initialize();
+
+    await store.list({ user_id: "*" });
+
+    // All clauses dropped, so list() falls back to its match-all "" filter
+    // rather than a literal `(metadata["user_id"] == "*")` that matches nothing.
+    const queryCall = client.calls.filter((c) => c.method === "query").pop()!;
+    expect(queryCall.args.filter).toBe("");
   });
 
   it("normalises L2 distances into a 0..1 similarity score", async () => {
@@ -432,12 +494,18 @@ describe("Milvus vector store (TS OSS SDK)", () => {
       ["a"],
       [{ data: "hello world", text_lemmatized: "hello world lemma" }],
     );
+    await store.insert(
+      [[0.2, 0.3, 0.4]],
+      ["c"],
+      [{ data: "hello world", textLemmatized: "hello world camel" }],
+    );
     // Falls back to raw data when there is no lemmatized text.
     await store.insert([[0.4, 0.5, 0.6]], ["b"], [{ data: "just data" }]);
 
     const insertCalls = client.calls.filter((c) => c.method === "insert");
     expect(insertCalls[0].args.data[0].text).toBe("hello world lemma");
-    expect(insertCalls[1].args.data[0].text).toBe("just data");
+    expect(insertCalls[1].args.data[0].text).toBe("hello world camel");
+    expect(insertCalls[2].args.data[0].text).toBe("just data");
   });
 
   it("writes the BM25 text field on update for a BM25 collection", async () => {

@@ -1,5 +1,6 @@
 import { LLM, LLMResponse } from "./base";
 import { LLMConfig, Message } from "../types";
+import { loadPeer } from "../utils/load_peer";
 
 /**
  * Providers recognised in Bedrock model identifiers, mirroring the Python
@@ -29,7 +30,18 @@ const PROVIDERS = [
  * Extract the model-family provider from a Bedrock model id
  * (e.g. `anthropic.claude-3-sonnet-...` -> `anthropic`).
  */
-export function extractProvider(model: string): string {
+export function extractProvider(
+  model: string,
+  providerOverride?: string,
+): string {
+  if (providerOverride) {
+    if (!PROVIDERS.includes(providerOverride)) {
+      throw new Error(
+        `Unknown providerOverride '${providerOverride}'. Valid providers: ${PROVIDERS.join(", ")}`,
+      );
+    }
+    return providerOverride;
+  }
   for (const provider of PROVIDERS) {
     const re = new RegExp(
       `\\b${provider.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
@@ -79,7 +91,7 @@ export class AWSBedrockLLM implements LLM {
     this.model =
       (typeof config.model === "string" && config.model) ||
       "anthropic.claude-3-5-sonnet-20240620-v1:0";
-    this.provider = extractProvider(this.model);
+    this.provider = extractProvider(this.model, config.providerOverride);
     this.temperature = config.temperature ?? 0.1;
     this.maxTokens = config.maxTokens ?? 2000;
     this.topP = config.topP;
@@ -114,18 +126,17 @@ export class AWSBedrockLLM implements LLM {
    */
   private async getSDK(): Promise<BedrockSDK> {
     if (!this.sdkPromise) {
-      this.sdkPromise = import("@aws-sdk/client-bedrock-runtime").then(
-        (sdk) => sdk as unknown as BedrockSDK,
-        (err) => {
+      this.sdkPromise = loadPeer(
+        "@aws-sdk/client-bedrock-runtime",
+        "AWS Bedrock LLM provider",
+        () => import("@aws-sdk/client-bedrock-runtime"),
+      )
+        .then((sdk) => sdk as unknown as BedrockSDK)
+        .catch((error) => {
           // Let a later call retry rather than caching the rejection forever.
           this.sdkPromise = undefined;
-          const detail = err instanceof Error ? err.message : String(err);
-          throw new Error(
-            "The '@aws-sdk/client-bedrock-runtime' package is required to use the AWS Bedrock LLM provider. " +
-              `Install it with: npm install @aws-sdk/client-bedrock-runtime (original error: ${detail})`,
-          );
-        },
-      );
+          throw error;
+        });
     }
     return this.sdkPromise;
   }

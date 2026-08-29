@@ -1,0 +1,66 @@
+import type { ZObject, Bundle, Memory } from '../types';
+
+const perform = async (z: ZObject, bundle: Bundle): Promise<Memory[]> => {
+	if (![bundle.inputData.user_id, bundle.inputData.agent_id, bundle.inputData.app_id, bundle.inputData.run_id].some(Boolean)) {
+		throw new z.errors.Error(
+			'Provide at least one of User ID, Agent ID, App ID, or Run ID.',
+			'InvalidInput',
+			400,
+		);
+	}
+	const body: Record<string, unknown> = {};
+	const speakers = [
+		bundle.inputData.user_id && { user_id: bundle.inputData.user_id },
+		bundle.inputData.agent_id && { agent_id: bundle.inputData.agent_id },
+	].filter(Boolean);
+	const clauses: unknown[] = speakers.length > 1 ? [{ OR: speakers }] : speakers;
+	if (bundle.inputData.app_id) clauses.push({ app_id: bundle.inputData.app_id });
+	if (bundle.inputData.run_id) clauses.push({ run_id: bundle.inputData.run_id });
+	if (clauses.length > 0) body.filters = clauses.length === 1 ? clauses[0] : { AND: clauses };
+
+	const response = await z.request({
+		url: '/v3/memories/',
+		method: 'POST',
+		params: {
+			page: Math.max(1, Math.floor(Number(bundle.inputData.page) || 1)),
+			page_size: Math.max(1, Math.floor(Number(bundle.inputData.limit) || 50)),
+		},
+		body,
+	});
+	// Guard against a null/empty body; always return an array.
+	const data = response.data as Memory[] | { results?: Memory[] } | null;
+	return Array.isArray(data) ? data : data?.results ?? [];
+};
+
+export default {
+	key: 'get_memories',
+	noun: 'Memory',
+	display: {
+		label: 'Find Memories by User',
+		description: 'Finds all stored memories for a user.',
+	},
+	operation: {
+		perform,
+		inputFields: [
+			{ key: 'user_id', label: 'User ID', type: 'string' },
+			{ key: 'agent_id', label: 'Agent ID', type: 'string' },
+			{ key: 'app_id', label: 'App ID', type: 'string' },
+			{ key: 'run_id', label: 'Run ID', type: 'string' },
+			{
+				key: 'limit',
+				label: 'Limit',
+				type: 'integer',
+				default: '50',
+				helpText: 'Max memories per page. Use Page to page through larger result sets.',
+			},
+			{
+				key: 'page',
+				label: 'Page',
+				type: 'integer',
+				default: '1',
+				helpText: 'Which page of results to return (1-based).',
+			},
+		],
+		sample: { id: '00000000-0000-0000-0000-000000000000', memory: 'User loves hiking' },
+	},
+};

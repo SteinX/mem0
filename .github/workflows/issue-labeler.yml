@@ -12,28 +12,56 @@ jobs:
   label:
     runs-on: ubuntu-latest
     steps:
-      - uses: stefanbuck/github-issue-parser@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: stefanbuck/github-issue-parser@cb6e97157cbf851e3a393ff8d57c93a484cc323f # v3
         id: issue-parser
+        continue-on-error: true
         with:
           template-path: .github/ISSUE_TEMPLATE/bug_report.yml
 
-      - uses: redhat-plumbers-in-action/advanced-issue-labeler@v3
+      - uses: redhat-plumbers-in-action/advanced-issue-labeler@b80ae64e3e156e9c111b075bfa04b295d54e8e2e # v3
+        continue-on-error: true
         with:
           issue-form: ${{ steps.issue-parser.outputs.jsonString }}
-          section: component
           token: ${{ secrets.GITHUB_TOKEN }}
           config-path: .github/advanced-issue-labeler.yml
 
-      - uses: stefanbuck/github-issue-parser@v3
-        id: feature-parser
-        if: contains(github.event.issue.labels.*.name, 'enhancement')
+      - name: Infer component from text when the form was not used
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
-          template-path: .github/ISSUE_TEMPLATE/feature_request.yml
+          script: |
+            const {
+              componentLabels,
+              inferComponentLabels,
+              loadKeywords,
+            } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/infer-component-labels.js`);
 
-      - uses: redhat-plumbers-in-action/advanced-issue-labeler@v3
-        if: contains(github.event.issue.labels.*.name, 'enhancement')
-        with:
-          issue-form: ${{ steps.feature-parser.outputs.jsonString }}
-          section: component
-          token: ${{ secrets.GITHUB_TOKEN }}
-          config-path: .github/advanced-issue-labeler.yml
+            const { data: issue } = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const keywords = loadKeywords(`${process.env.GITHUB_WORKSPACE}/.github/component-keywords.json`);
+            const known = componentLabels(keywords);
+            const existing = issue.labels.map((label) => label.name || label);
+            if (existing.some((name) => known.includes(name))) {
+              core.info(`Component label already present: ${existing.join(', ')}`);
+              return;
+            }
+
+            const labels = inferComponentLabels(`${issue.title}\n\n${issue.body || ''}`, keywords);
+
+            if (labels.length === 0) {
+              core.info('No component could be inferred from the issue text');
+              return;
+            }
+
+            core.info(`Inferred: ${labels.join(', ')}`);
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels,
+            });

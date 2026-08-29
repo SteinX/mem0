@@ -1,6 +1,7 @@
 import axios, { AxiosInstance } from "axios";
 import { VectorStore } from "./base";
 import { SearchFilters, VectorStoreConfig, VectorStoreResult } from "../types";
+import { loadPeer } from "../utils/load_peer";
 
 const SAFE_IDENTIFIER_RE = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/;
 const DEFAULT_PAGE_SIZE = 100;
@@ -1049,19 +1050,22 @@ export class DatabricksVectorStore implements VectorStore {
     DBSQLClient: new () => DatabricksSqlClientLike;
   }> {
     if (!this.sqlModulePromise) {
-      this.sqlModulePromise = import("@databricks/sql").then(
-        (mod) =>
-          mod as unknown as { DBSQLClient: new () => DatabricksSqlClientLike },
-        (err) => {
+      this.sqlModulePromise = loadPeer(
+        "@databricks/sql",
+        "Databricks vector store",
+        () => import("@databricks/sql"),
+      )
+        .then(
+          (mod) =>
+            mod as unknown as {
+              DBSQLClient: new () => DatabricksSqlClientLike;
+            },
+        )
+        .catch((error) => {
           // Let a later call retry rather than caching the rejection forever.
           this.sqlModulePromise = undefined;
-          const detail = err instanceof Error ? err.message : String(err);
-          throw new Error(
-            "The '@databricks/sql' package is required to use the Databricks vector store. " +
-              `Install it with: npm install @databricks/sql (original error: ${detail})`,
-          );
-        },
-      );
+          throw error;
+        });
     }
     return this.sqlModulePromise;
   }

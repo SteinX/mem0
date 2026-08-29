@@ -6,6 +6,7 @@ import type {
 } from "@aws-sdk/client-s3vectors";
 import { VectorStore } from "./base";
 import { SearchFilters, VectorStoreConfig, VectorStoreResult } from "../types";
+import { loadPeer } from "../utils/load_peer";
 
 const MIGRATION_INDEX_NAME = "memory_migrations";
 const MIGRATION_VECTOR_KEY = "mem0-user";
@@ -72,10 +73,13 @@ export class S3Vectors implements VectorStore {
    */
   private getSdk(): Promise<any> {
     if (!this.sdkPromise) {
-      this.sdkPromise = import("@aws-sdk/client-s3vectors").catch(() => {
-        throw new Error(
-          "The '@aws-sdk/client-s3vectors' package is required to use the S3 Vectors store. Install it with: npm install @aws-sdk/client-s3vectors",
-        );
+      this.sdkPromise = loadPeer(
+        "@aws-sdk/client-s3vectors",
+        "S3 Vectors store",
+        () => import("@aws-sdk/client-s3vectors"),
+      ).catch((error) => {
+        this.sdkPromise = undefined;
+        throw error;
       });
     }
     return this.sdkPromise;

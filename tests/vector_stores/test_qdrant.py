@@ -54,6 +54,30 @@ class TestQdrant(unittest.TestCase):
                 )
             self.assertTrue(os.path.isfile(sentinel))
 
+    def test_reset_clears_points_on_local_qdrant(self):
+        """#6411: reset() must drop points even when the collection dir survives delete_col()."""
+        with tempfile.TemporaryDirectory() as tmp:
+            store = Qdrant(collection_name="reset_me", embedding_model_dims=4, path=os.path.join(tmp, "qdrant"))
+            try:
+                self.assertTrue(store.is_local)
+                store.insert(
+                    vectors=[[0.1, 0.2, 0.3, 0.4]],
+                    payloads=[{"data": "remember me"}],
+                    ids=[str(uuid.uuid4())],
+                )
+                self.assertEqual(len(store.list(top_k=10)[0]), 1)
+
+                # Simulate Windows/NFS, where rmtree(ignore_errors=True) silently fails
+                # on the open sqlite handle and the collection dir survives delete_col().
+                with patch("qdrant_client.local.qdrant_local.shutil.rmtree"):
+                    store.reset()
+
+                self.assertEqual(len(store.list(top_k=10)[0]), 0)
+                sparse = store.client.get_collection("reset_me").config.params.sparse_vectors
+                self.assertIn("bm25", sparse or {})
+            finally:
+                store.client.close()
+
     def test_create_col(self):
         self.client_mock.get_collections.return_value = MagicMock(collections=[])
 
@@ -70,6 +94,56 @@ class TestQdrant(unittest.TestCase):
             vectors_config=expected_config,
             sparse_vectors_config=expected_sparse_config,
         )
+
+    def test_remote_collection_indexes_mutation_marker(self):
+        self.client_mock.create_payload_index.assert_any_call(
+            collection_name="test_collection",
+            field_name="_mem0_sidecar_mutation_id",
+            field_schema="keyword",
+        )
+
+    def test_existing_remote_collection_indexes_mutation_marker(self):
+        existing = MagicMock()
+        existing.name = "existing_collection"
+        client = MagicMock(spec=QdrantClient)
+        client.get_collections.return_value = MagicMock(collections=[existing])
+        client.get_collection.return_value.config.params.sparse_vectors = {"bm25": object()}
+
+        Qdrant(collection_name="existing_collection", embedding_model_dims=128, client=client)
+
+        client.create_collection.assert_not_called()
+        client.create_payload_index.assert_any_call(
+            collection_name="existing_collection",
+            field_name="_mem0_sidecar_mutation_id",
+            field_schema="keyword",
+        )
+
+    def test_local_collection_skips_payload_indexes(self):
+        qdrant = object.__new__(Qdrant)
+        qdrant.is_local = True
+        qdrant.collection_name = "local_collection"
+        qdrant.client = MagicMock(spec=QdrantClient)
+
+        qdrant._create_filter_indexes()
+
+        qdrant.client.create_payload_index.assert_not_called()
+
+    def test_repeated_remote_index_bootstrap_tolerates_existing_indexes(self):
+        qdrant = object.__new__(Qdrant)
+        qdrant.is_local = False
+        qdrant.collection_name = "existing_collection"
+        qdrant.client = MagicMock(spec=QdrantClient)
+        qdrant.client.create_payload_index.side_effect = RuntimeError("already exists")
+
+        qdrant._create_filter_indexes()
+        qdrant._create_filter_indexes()
+
+        marker_calls = [
+            call
+            for call in qdrant.client.create_payload_index.call_args_list
+            if call.kwargs["field_name"] == "_mem0_sidecar_mutation_id"
+        ]
+        self.assertEqual(len(marker_calls), 2)
 
     def test_insert(self):
         vectors = [[0.1, 0.2], [0.3, 0.4]]

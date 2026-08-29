@@ -1,5 +1,6 @@
 import { VectorStore } from "./base";
 import { SearchFilters, VectorStoreConfig, VectorStoreResult } from "../types";
+import { loadPeerSync } from "../utils/load_peer";
 
 /**
  * Supported Milvus metric types. Mirrors the Python provider
@@ -77,24 +78,17 @@ export class Milvus implements VectorStore {
         this.FunctionType = undefined;
       }
     } else {
-      let MilvusClient: any;
-      let DataType: any;
-      let FunctionType: any;
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const sdk = require("@zilliz/milvus2-sdk-node");
-        MilvusClient = sdk.MilvusClient;
-        DataType = sdk.DataType;
-        FunctionType = sdk.FunctionType;
-      } catch (_) {
-        throw new Error(
-          "The '@zilliz/milvus2-sdk-node' package is required to use the Milvus vector store. " +
-            "Install it with: npm install @zilliz/milvus2-sdk-node",
-        );
-      }
-      this.DataType = DataType;
-      this.FunctionType = FunctionType;
-      this.client = new MilvusClient({
+      const sdk = loadPeerSync(
+        "@zilliz/milvus2-sdk-node",
+        "Milvus vector store",
+        () => {
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          return require("@zilliz/milvus2-sdk-node");
+        },
+      );
+      this.DataType = sdk.DataType;
+      this.FunctionType = sdk.FunctionType;
+      this.client = new sdk.MilvusClient({
         address: config.url || "http://localhost:19530",
         token: config.token,
         database: config.dbName || undefined,
@@ -235,6 +229,13 @@ export class Milvus implements VectorStore {
       if (!Milvus.SAFE_FILTER_KEY.test(key)) {
         throw new Error(`Invalid filter key: ${JSON.stringify(key)}`);
       }
+      if (value === "*") {
+        // Wildcard - match any value. Milvus has no direct wildcard, so skip
+        // the clause rather than emitting a literal `== "*"` that matches
+        // nothing. Mirrors the Python provider (#6187) and the chroma/pinecone
+        // stores.
+        continue;
+      }
       if (typeof value === "string") {
         // Escape backslashes before quotes so a value can't break out of the
         // string literal (order matters, exactly as in the Python provider).
@@ -252,13 +253,13 @@ export class Milvus implements VectorStore {
   }
 
   /**
-   * Text fed to the BM25 sparse index for a payload. Prefers the lemmatized
-   * text, falls back to the raw memory `data`, and truncates to the VarChar
-   * limit (mirrors the Python provider).
+   * Text fed to the BM25 sparse index for a payload. Prefers `textLemmatized`,
+   * then `text_lemmatized`, then raw `data`; truncates to the VarChar limit.
    */
   private bm25Text(payload?: Record<string, any>): string {
     if (!payload) return "";
-    const raw = payload.text_lemmatized || payload.data || "";
+    const raw =
+      payload.textLemmatized || payload.text_lemmatized || payload.data || "";
     return String(raw).slice(0, 65535);
   }
 

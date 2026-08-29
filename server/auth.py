@@ -3,7 +3,7 @@ import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from db import get_db
+from db import SessionLocal
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
@@ -182,12 +182,16 @@ async def verify_auth(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     x_api_key: str | None = Depends(api_key_header),
-    db: Session = Depends(get_db),
 ) -> User | None:
-    """Authenticate via JWT, X-API-Key, or legacy ADMIN_API_KEY. Returns User or None."""
+    """Authenticate via JWT, X-API-Key, or legacy ADMIN_API_KEY. Returns User or None.
+
+    A short-lived session is opened only on the branches that query the DB, so no
+    pooled connection is held for the lifetime of the (possibly long-running) request.
+    """
     if credentials is not None:
         _mark_auth_type(request, "bearer")
-        user = _resolve_user_from_jwt(credentials.credentials, db)
+        with SessionLocal() as db:
+            user = _resolve_user_from_jwt(credentials.credentials, db)
         _mark_credential(request, kind="session")
         return user
 
@@ -201,7 +205,8 @@ async def verify_auth(
             )
             return None
         _mark_auth_type(request, "api_key")
-        return _resolve_user_from_api_key(request, x_api_key, db)
+        with SessionLocal() as db:
+            return _resolve_user_from_api_key(request, x_api_key, db)
 
     if AUTH_DISABLED:
         _mark_auth_type(request, "disabled")
@@ -218,12 +223,12 @@ async def verify_auth(
 async def require_auth(
     request: Request,
     user: User | None = Depends(verify_auth),
-    db: Session = Depends(get_db),
 ) -> User:
     """Like verify_auth but guarantees a non-None User. Use for endpoints that require auth."""
     if user is None:
         if getattr(request.state, "auth_type", "none") in {"admin_api_key", "disabled"}:
-            default_user = _get_default_user(db)
+            with SessionLocal() as db:
+                default_user = _get_default_user(db)
             if default_user is not None:
                 return default_user
         raise HTTPException(status_code=401, detail="Authentication required.")
@@ -273,7 +278,6 @@ _BOOTSTRAP_ADMIN = User(
 async def require_admin(
     request: Request,
     user: User | None = Depends(verify_auth),
-    db: Session = Depends(get_db),
 ) -> User:
     """Like require_auth but also enforces admin role.
 
@@ -287,7 +291,8 @@ async def require_admin(
     auth_type = getattr(request.state, "auth_type", "none")
     if user is None:
         if auth_type in {"admin_api_key", "disabled"}:
-            default_user = _get_default_user(db)
+            with SessionLocal() as db:
+                default_user = _get_default_user(db)
             if default_user is not None:
                 if default_user.role != "admin":
                     raise HTTPException(status_code=403, detail="Admin role required.")
