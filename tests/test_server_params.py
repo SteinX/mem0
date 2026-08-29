@@ -691,6 +691,45 @@ class TestGetMemories:
             top_k=1000,
         )
 
+    def test_get_memories_exact_mutation_marker_postfilters_provider_results(
+        self,
+        client,
+        mock_memory,
+    ):
+        marker = "c" * 64
+        mock_memory.vector_store.list.return_value = [[
+            MagicMock(
+                id="unrelated",
+                payload={
+                    "data": "wrong mutation",
+                    "user_id": "test_routing_user",
+                    "_mem0_sidecar_mutation_id": "d" * 64,
+                },
+            ),
+            MagicMock(
+                id="matching",
+                payload={
+                    "data": "recovered mutation",
+                    "user_id": "test_routing_user",
+                    "_mem0_sidecar_mutation_id": marker,
+                },
+            ),
+        ]]
+
+        response = client.get(
+            "/memories",
+            params={
+                "user_id": "test_routing_user",
+                "_mem0_sidecar_mutation_id": marker,
+                "top_k": 1000,
+            },
+        )
+
+        assert response.status_code == 200
+        assert [item["id"] for item in response.json()["results"]] == [
+            "matching"
+        ]
+
     @pytest.mark.parametrize(
         "marker",
         ["a" * 63, "a" * 65, "g" * 64],

@@ -452,7 +452,22 @@ def _list_all_memories(
     else:
         results = get_memory_instance().vector_store.list(filters=filters, top_k=limit)
     rows = results[0] if results and isinstance(results, list) and isinstance(results[0], list) else results or []
-    return {"results": [_serialize_memory(row) for row in rows]}
+    memories = [_serialize_memory(row) for row in rows]
+    if filters:
+        memories = [
+            memory
+            for memory in memories
+            if all(
+                (
+                    memory.get(key)
+                    if key in {"user_id", "agent_id", "run_id"}
+                    else memory["metadata"].get(key)
+                )
+                == value
+                for key, value in filters.items()
+            )
+        ]
+    return {"results": memories}
 
 
 @app.get("/memories", summary="Get memories")
@@ -474,15 +489,16 @@ def get_all_memories(
 ):
     """Retrieve stored memories. Lists all memories when no identifier is provided (admin only)."""
     try:
-        filters = {
-            key: _validate_and_trim_entity_id(value, key)
-            for key, value in {
-                "user_id": user_id,
-                "run_id": run_id,
-                "agent_id": agent_id,
-            }.items()
-            if value
-        }
+        filters: Dict[str, str] = {}
+        for key, value in {
+            "user_id": user_id,
+            "run_id": run_id,
+            "agent_id": agent_id,
+        }.items():
+            if value:
+                normalized = _validate_and_trim_entity_id(value, key)
+                if normalized is not None:
+                    filters[key] = normalized
         if not filters:
             reject_client_api_key(
                 request,
@@ -495,12 +511,15 @@ def get_all_memories(
                 # Admin all-memory listing is intentionally raw; scoped get_all below applies expiry visibility.
                 return _list_all_memories(limit=top_k if top_k is not None else ALL_MEMORIES_LIMIT)
         if mutation_marker is not None:
-            filters["_mem0_sidecar_mutation_id"] = mutation_marker
+            marker_filters: Dict[str, str] = {
+                **filters,
+                "_mem0_sidecar_mutation_id": mutation_marker,
+            }
             return _list_all_memories(
                 limit=top_k if top_k is not None else ALL_MEMORIES_LIMIT,
-                filters=filters,
+                filters=marker_filters,
             )
-        params = {"filters": filters}
+        params: Dict[str, Any] = {"filters": filters}
         if top_k is not None:
             params["top_k"] = top_k
         params["show_expired"] = show_expired
