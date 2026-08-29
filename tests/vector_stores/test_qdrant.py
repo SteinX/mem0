@@ -102,6 +102,49 @@ class TestQdrant(unittest.TestCase):
             field_schema="keyword",
         )
 
+    def test_existing_remote_collection_indexes_mutation_marker(self):
+        existing = MagicMock()
+        existing.name = "existing_collection"
+        client = MagicMock(spec=QdrantClient)
+        client.get_collections.return_value = MagicMock(collections=[existing])
+        client.get_collection.return_value.config.params.sparse_vectors = {"bm25": object()}
+
+        Qdrant(collection_name="existing_collection", embedding_model_dims=128, client=client)
+
+        client.create_collection.assert_not_called()
+        client.create_payload_index.assert_any_call(
+            collection_name="existing_collection",
+            field_name="_mem0_sidecar_mutation_id",
+            field_schema="keyword",
+        )
+
+    def test_local_collection_skips_payload_indexes(self):
+        qdrant = object.__new__(Qdrant)
+        qdrant.is_local = True
+        qdrant.collection_name = "local_collection"
+        qdrant.client = MagicMock(spec=QdrantClient)
+
+        qdrant._create_filter_indexes()
+
+        qdrant.client.create_payload_index.assert_not_called()
+
+    def test_repeated_remote_index_bootstrap_tolerates_existing_indexes(self):
+        qdrant = object.__new__(Qdrant)
+        qdrant.is_local = False
+        qdrant.collection_name = "existing_collection"
+        qdrant.client = MagicMock(spec=QdrantClient)
+        qdrant.client.create_payload_index.side_effect = RuntimeError("already exists")
+
+        qdrant._create_filter_indexes()
+        qdrant._create_filter_indexes()
+
+        marker_calls = [
+            call
+            for call in qdrant.client.create_payload_index.call_args_list
+            if call.kwargs["field_name"] == "_mem0_sidecar_mutation_id"
+        ]
+        self.assertEqual(len(marker_calls), 2)
+
     def test_insert(self):
         vectors = [[0.1, 0.2], [0.3, 0.4]]
         payloads = [{"key": "value1"}, {"key": "value2"}]

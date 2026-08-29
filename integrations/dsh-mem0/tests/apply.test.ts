@@ -23,6 +23,7 @@ vi.mock("@deepseek-ai/dsh-tools", () => ({
 }));
 
 import { apply, type Config } from "../src/index.ts";
+import { MAX_OUTPUT_BYTES, MAX_OUTPUT_LINES } from "../src/output.ts";
 
 interface RegisteredTool {
   name: string;
@@ -119,6 +120,20 @@ describe("search_memory tool", () => {
     expect(out).toContain("search_memory failed");
     expect(out).toContain("network down");
   });
+
+  it("caps oversized error output", async () => {
+    mockSearch.mockRejectedValue(
+      new Error(Array(MAX_OUTPUT_LINES + 50).fill("界".repeat(100)).join("\n")),
+    );
+    const tools = applyAndCollect({ apiKey: "k", userId: "u" });
+
+    const out = String(await tools.get("search_memory")!.execute({ query: "x" }, {}));
+
+    expect(out).toContain("search_memory failed");
+    expect(out).toContain("[Output truncated:");
+    expect(out.split("\n").length).toBeLessThanOrEqual(MAX_OUTPUT_LINES);
+    expect(Buffer.byteLength(out, "utf8")).toBeLessThanOrEqual(MAX_OUTPUT_BYTES);
+  });
 });
 
 describe("add_memory tool", () => {
@@ -157,5 +172,19 @@ describe("add_memory tool", () => {
 
     expect(out).toContain("add_memory failed");
     expect(out).toContain("boom");
+  });
+
+  it("caps oversized error output", async () => {
+    mockAdd.mockRejectedValue(
+      new Error(Array(MAX_OUTPUT_LINES + 50).fill("界".repeat(100)).join("\n")),
+    );
+    const tools = applyAndCollect({ apiKey: "k", userId: "u" });
+
+    const out = String(await tools.get("add_memory")!.execute({ text: "x" }, {}));
+
+    expect(out).toContain("add_memory failed");
+    expect(out).toContain("[Output truncated:");
+    expect(out.split("\n").length).toBeLessThanOrEqual(MAX_OUTPUT_LINES);
+    expect(Buffer.byteLength(out, "utf8")).toBeLessThanOrEqual(MAX_OUTPUT_BYTES);
   });
 });

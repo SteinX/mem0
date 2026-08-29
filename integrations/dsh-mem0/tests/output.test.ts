@@ -9,7 +9,7 @@ describe("truncateOutput", () => {
   it("caps output at MAX_OUTPUT_LINES and appends a notice", () => {
     const many = Array.from({ length: MAX_OUTPUT_LINES + 50 }, (_, i) => `line ${i}`).join("\n");
     const out = truncateOutput(many);
-    expect(out.split("\n").length).toBeLessThanOrEqual(MAX_OUTPUT_LINES + 3);
+    expect(out.split("\n").length).toBeLessThanOrEqual(MAX_OUTPUT_LINES);
     expect(out).toContain("[Output truncated:");
     expect(out).toContain(`of ${MAX_OUTPUT_LINES + 50} lines`);
   });

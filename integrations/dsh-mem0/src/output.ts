@@ -31,7 +31,7 @@ export function truncateOutput(text: string): string {
     return text;
   }
 
-  const kept = lines.slice(0, MAX_OUTPUT_LINES);
+  const kept = lines.slice(0, Math.max(0, MAX_OUTPUT_LINES - 2));
   let result = kept.join("\n");
   const byteCapped = utf8Bytes(result) > MAX_OUTPUT_BYTES;
 

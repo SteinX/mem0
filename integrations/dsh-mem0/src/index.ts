@@ -99,7 +99,9 @@ export function apply(ctx: Context, config: Config): void {
           const { results } = await client.search(query, { filters, topK });
           return truncateOutput(formatMemoryList(results ?? []));
         } catch (err) {
-          return `search_memory failed: ${err instanceof Error ? err.message : String(err)}`;
+          return truncateOutput(
+            `search_memory failed: ${err instanceof Error ? err.message : String(err)}`,
+          );
         }
       },
     }),
@@ -125,7 +127,9 @@ export function apply(ctx: Context, config: Config): void {
           });
           return truncateOutput(formatAddResult(result));
         } catch (err) {
-          return `add_memory failed: ${err instanceof Error ? err.message : String(err)}`;
+          return truncateOutput(
+            `add_memory failed: ${err instanceof Error ? err.message : String(err)}`,
+          );
         }
       },
     }),
