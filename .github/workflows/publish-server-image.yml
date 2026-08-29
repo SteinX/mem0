@@ -6,7 +6,7 @@ on:
       image_tag:
         description: Image tag to publish from an existing Git tag.
         required: true
-        default: v2.0.12-steinx.1
+        default: v2.0.19-steinx.1
         type: string
       push_latest:
         description: Also update the latest tag.
