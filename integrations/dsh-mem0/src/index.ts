@@ -70,9 +70,10 @@ export function apply(ctx: Context, config: Config): void {
     throw new Error("dsh-mem0: config.userId is required");
   }
 
+  const host = config.host?.replace(/\/+$/, "");
   const client = new MemoryClient({
     apiKey,
-    ...(config.host ? { host: config.host } : {}),
+    ...(host ? { host } : {}),
   });
 
   // Recall. The platform rejects top-level entity params on search, so scope

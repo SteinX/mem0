@@ -3,8 +3,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // Offline mock of the Mem0 SDK so these tests never touch the network.
 const mockSearch = vi.fn();
 const mockAdd = vi.fn();
+const mockClientConfig = vi.fn();
 vi.mock("mem0ai", () => ({
   MemoryClient: class {
+    constructor(config: unknown) {
+      mockClientConfig(config);
+    }
     search = mockSearch;
     add = mockAdd;
   },
@@ -40,6 +44,7 @@ beforeEach(() => {
   savedKey = process.env.MEM0_API_KEY;
   mockSearch.mockReset();
   mockAdd.mockReset();
+  mockClientConfig.mockReset();
 });
 
 afterEach(() => {
@@ -60,6 +65,19 @@ describe("apply() config validation", () => {
   it("registers both memory tools", () => {
     const tools = applyAndCollect({ apiKey: "k", userId: "u" });
     expect([...tools.keys()].sort()).toEqual(["add_memory", "search_memory"]);
+  });
+
+  it("removes all trailing slashes from the host override", () => {
+    applyAndCollect({
+      apiKey: "k",
+      userId: "u",
+      host: "https://mem0.example///",
+    });
+
+    expect(mockClientConfig).toHaveBeenCalledWith({
+      apiKey: "k",
+      host: "https://mem0.example",
+    });
   });
 });
 

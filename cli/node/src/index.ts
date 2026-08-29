@@ -7,7 +7,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { Command } from "commander";
+import { Command, InvalidArgumentError } from "commander";
 import { AuthError, type Backend, getBackend } from "./backend/index.js";
 import { colors, printError, printWarning } from "./branding.js";
 import type { Mem0Config } from "./config.js";
@@ -97,6 +97,17 @@ async function getBackendOnly(
 
 function printVersion(): void {
 	console.log(`  ${colors.brand("◆ Mem0")} CLI v${CLI_VERSION}`);
+}
+
+function parseTimestamp(value: string): number {
+	if (!/^-?\d+$/.test(value)) {
+		throw new InvalidArgumentError("Timestamp must be a finite integer.");
+	}
+	const timestamp = Number(value);
+	if (!Number.isSafeInteger(timestamp)) {
+		throw new InvalidArgumentError("Timestamp must be a finite integer.");
+	}
+	return timestamp;
 }
 
 function checkAgentMode(): boolean {
@@ -344,8 +355,10 @@ program
 		"--structured-data-schema <json>",
 		"Schema for structured data extraction, as JSON.",
 	)
-	.option("--timestamp <unix>", "Unix timestamp for the memory.", (v) =>
-		Number.parseInt(v),
+	.option(
+		"--timestamp <unix>",
+		"Unix timestamp for the memory.",
+		parseTimestamp,
 	)
 	.option("-o, --output <format>", "Output format: text, json, quiet.", "text")
 	.option("--api-key <key>", "Override API key.")
@@ -526,8 +539,10 @@ program
 	.description("Update a memory's text or metadata.")
 	.option("-m, --metadata <json>", "Update metadata (JSON).")
 	.option("--expires <date>", "Expiration date (YYYY-MM-DD).")
-	.option("--timestamp <unix>", "Unix timestamp for the memory.", (v) =>
-		Number.parseInt(v),
+	.option(
+		"--timestamp <unix>",
+		"Unix timestamp for the memory.",
+		parseTimestamp,
 	)
 	.option("-o, --output <format>", "Output: text, json, quiet.", "text")
 	.option("--api-key <key>", "Override API key.")

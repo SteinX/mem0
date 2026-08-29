@@ -233,6 +233,24 @@ describe("cmdAdd rejects invalid input before calling the backend (MEM-5893)", (
 		expect(mockBackend.add).not.toHaveBeenCalled();
 		exitSpy.mockRestore();
 	});
+
+	it("rejects a nonexistent --expires calendar date", async () => {
+		const { cmdAdd } = await import("../src/commands/memory.js");
+		const exitSpy = mockProcessExit();
+
+		await expect(
+			cmdAdd(mockBackend, "test", {
+				userId: "alice",
+				immutable: false,
+				expires: "2099-02-30",
+				output: "text",
+			}),
+		).rejects.toThrow("process.exit:1");
+
+		expect(errOutput).toContain("Invalid date format");
+		expect(mockBackend.add).not.toHaveBeenCalled();
+		exitSpy.mockRestore();
+	});
 });
 
 describe("cmdAdd deduplicates PENDING", () => {
@@ -439,6 +457,24 @@ describe("cmdUpdate", () => {
 				timestamp: 1700000000,
 			}),
 		);
+	});
+
+	it("rejects a nonexistent --expires calendar date", async () => {
+		const { cmdUpdate } = await import("../src/commands/memory.js");
+		const exitSpy = vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+			throw new Error(`process.exit:${code}`);
+		}) as never);
+
+		await expect(
+			cmdUpdate(mockBackend, "abc-123", "New text", {
+				expires: "2099-02-30",
+				output: "text",
+			}),
+		).rejects.toThrow("process.exit:1");
+
+		expect(errOutput).toContain("Invalid date format");
+		expect(mockBackend.update).not.toHaveBeenCalled();
+		exitSpy.mockRestore();
 	});
 });
 

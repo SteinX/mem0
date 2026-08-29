@@ -25,13 +25,29 @@ import { isAgentMode, setCurrentCommand, stdinIsPiped } from "../state.js";
 
 /** Exit 1 if value is not a future YYYY-MM-DD date. */
 function _validateExpires(value: string): void {
-	if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+	const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+	if (!match) {
 		printError(
 			"Invalid date format for --expires. Use YYYY-MM-DD (e.g. 2025-12-31).",
 		);
 		process.exit(1);
 	}
-	if (new Date(value) <= new Date()) {
+
+	const date = new Date(`${value}T00:00:00Z`);
+	const [, year, month, day] = match;
+	if (
+		Number.isNaN(date.getTime()) ||
+		date.getUTCFullYear() !== Number(year) ||
+		date.getUTCMonth() + 1 !== Number(month) ||
+		date.getUTCDate() !== Number(day)
+	) {
+		printError(
+			"Invalid date format for --expires. Use YYYY-MM-DD (e.g. 2025-12-31).",
+		);
+		process.exit(1);
+	}
+
+	if (date <= new Date()) {
 		printError("--expires date must be in the future.");
 		process.exit(1);
 	}

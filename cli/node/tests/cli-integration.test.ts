@@ -129,6 +129,16 @@ describe("CLI Integration — help and version", () => {
     expect(result.stdout).toContain("--output");
   });
 
+  it.each([
+    ["add", ["add", "test", "--timestamp", "abc"]],
+    ["add", ["add", "test", "--timestamp", "123junk"]],
+    ["update", ["update", "memory-id", "test", "--timestamp", "123junk"]],
+  ])("%s rejects a malformed --timestamp", (_command, args) => {
+    const result = run(args);
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stdout + result.stderr).toContain("finite integer");
+  });
+
   it("search help has --rerank flag", () => {
     const result = run(["search", "--help"]);
     expect(result.exitCode).toBe(0);
