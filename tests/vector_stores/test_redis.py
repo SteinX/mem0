@@ -127,8 +127,11 @@ def test_mutation_marker_is_indexed_and_filterable():
 
     db.list(filters={"_mem0_sidecar_mutation_id": marker})
 
-    query = mock_index.search.call_args[0][0]
+    assert mock_index.search.call_count == 2
+    query = mock_index.search.call_args_list[0].args[0]
     assert query.query_string() == f"@_mem0_sidecar_mutation_id:{{{marker}}}"
+    fallback_query = mock_index.search.call_args_list[1].args[0]
+    assert fallback_query.query_string() == f'@metadata:"{marker}"'
 
 
 def test_insert_and_update_copy_mutation_marker_to_indexed_field():
