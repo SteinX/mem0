@@ -387,8 +387,7 @@ export class Mem0 implements INodeType {
 				url: `${baseUrl}${url}`,
 				json: true,
 				...(body ? { body } : {}),
-				// First-party usage attribution: the backend reads `source` (same as OpenClaw).
-				qs: { source: 'N8N', ...(qs ?? {}) },
+				...(qs ? { qs } : {}),
 			};
 			return (await this.helpers.httpRequestWithAuthentication.call(
 				this,
@@ -413,6 +412,7 @@ export class Mem0 implements INodeType {
 					const body: IDataObject = {
 						messages: messagesUi.map((m) => ({ role: m.role, content: m.content })),
 						infer: addFields.infer !== undefined ? addFields.infer : true,
+						source: 'N8N',
 					};
 					const userId = this.getNodeParameter('userId', i, '') as string;
 					if (userId) body.user_id = userId;

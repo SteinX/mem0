@@ -129,10 +129,19 @@ describe('Mem0 node (offline)', () => {
 		expect(out[0][0].json.error).toMatch(/Timed out waiting for memory event/i);
 	});
 
-	it('tags every request with source=N8N for first-party attribution', async () => {
-		const ctx = makeCtx('search', { query: 'x', userId: 'u1', limit: 5 }, async () => ({ results: [] }));
+	it('puts source=N8N in the Add payload for first-party attribution', async () => {
+		const ctx = makeCtx(
+			'add',
+			{
+				'messages.message': [{ role: 'user', content: 'hi' }],
+				addFields: {},
+				userId: 'u1',
+			},
+			async () => ({}),
+		);
 		await run(ctx);
-		expect(ctx.requests[0].qs.source).toBe('N8N');
+		expect(ctx.requests[0].body.source).toBe('N8N');
+		expect(ctx.requests[0].qs).toBeUndefined();
 	});
 
 	it('normalizes trailing slashes in a self-hosted base URL', async () => {
