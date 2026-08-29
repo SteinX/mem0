@@ -195,6 +195,17 @@ describe("add_memory tool", () => {
     expect(out).toContain("boom");
   });
 
+  it("reports a FAILED add envelope as a write failure", async () => {
+    mockAdd.mockResolvedValue({ status: "FAILED", message: "extraction failed" });
+    const tools = applyAndCollect({ apiKey: "k", userId: "u" });
+
+    const out = await tools.get("add_memory")!.execute({ text: "x" }, {});
+
+    expect(out).toContain("add_memory failed");
+    expect(out).toContain("extraction failed");
+    expect(out).not.toContain("Stored 1 memory");
+  });
+
   it("caps oversized error output", async () => {
     mockAdd.mockRejectedValue(
       new Error(Array(MAX_OUTPUT_LINES + 50).fill("界".repeat(100)).join("\n")),

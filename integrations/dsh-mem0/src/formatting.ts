@@ -53,6 +53,13 @@ export function formatAddResult(result: unknown): string {
     : ((result as { results?: MemoryLike[] } | null)?.results ??
       (result ? [result as MemoryLike] : []));
 
+  const failed = items.find(
+    (r) => (r as { status?: string }).status === "FAILED",
+  ) as { error?: string; message?: string } | undefined;
+  if (failed) {
+    throw new Error(failed.error ?? failed.message ?? "Mem0 memory event failed");
+  }
+
   const pending = items.find(
     (r) => (r as { status?: string }).status === "PENDING",
   ) as { eventId?: string; event_id?: string } | undefined;

@@ -61,6 +61,12 @@ describe("formatAddResult", () => {
     expect(formatAddResult([{ id: "1" }, { id: "2" }])).toContain("Stored 2 memories");
   });
 
+  it("throws when the async add event is already failed", () => {
+    expect(() =>
+      formatAddResult({ status: "FAILED", error: "provider rejected the write" }),
+    ).toThrow("provider rejected the write");
+  });
+
   it("unwraps a { results: [...] } envelope", () => {
     expect(formatAddResult({ results: [{ id: "1", memory: "A" }] })).toContain("Stored 1 memory");
   });
