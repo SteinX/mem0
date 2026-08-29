@@ -277,6 +277,57 @@ describe("MemoryClient - unresolved identity", () => {
     return mock;
   };
 
+  test("retries identity after a transient ping failure", async () => {
+    let pings = 0;
+    const mock = jest.fn((url: string) => {
+      if (url.includes("/v1/ping/")) {
+        pings += 1;
+        if (pings === 1) {
+          return Promise.resolve({
+            ok: false,
+            status: 500,
+            text: () => Promise.resolve("boom"),
+            json: () => Promise.resolve({}),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: () => Promise.resolve(""),
+          json: () =>
+            Promise.resolve({
+              status: "ok",
+              org_id: TEST_ORG_ID,
+              project_id: TEST_PROJECT_ID,
+              user_email: "test@example.com",
+            }),
+        });
+      }
+      if (url.includes("/api/v1/orgs/organizations/")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: () => Promise.resolve(""),
+          json: () => Promise.resolve({}),
+        });
+      }
+      return Promise.resolve({
+        ok: false,
+        status: 404,
+        text: () => Promise.resolve("not found"),
+        json: () => Promise.resolve({}),
+      });
+    });
+    global.fetch = mock as unknown as typeof global.fetch;
+
+    await freshClient().getProject({ fields: [] });
+
+    expect(pings).toBe(2);
+    expect(findUrl(mock, "/api/v1/orgs/organizations/")).toContain(
+      `/api/v1/orgs/organizations/${TEST_ORG_ID}/projects/${TEST_PROJECT_ID}/`,
+    );
+  });
+
   test("getProject reports the unset ids", async () => {
     pingFails();
     await expect(freshClient().getProject({ fields: [] })).rejects.toThrow(

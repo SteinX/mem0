@@ -185,7 +185,15 @@ export default class MemoryClient {
 
   // Blocks until the ping has populated organizationId/projectId.
   private async _awaitIdentity(): Promise<void> {
-    await this.initialized;
+    const attempted = this.initialized;
+    await attempted;
+    if (
+      (this.organizationId == null || this.projectId == null) &&
+      this.initialized === attempted
+    ) {
+      this.initialized = this._resolveIdentity();
+    }
+    if (this.initialized !== attempted) await this.initialized;
   }
 
   private async _initializeClient(): Promise<ClientIdentity> {
