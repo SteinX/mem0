@@ -170,7 +170,13 @@ class Qdrant(VectorStoreBase):
             logger.debug("Skipping payload index creation for local Qdrant (not supported)")
             return
 
-        common_fields = ["user_id", "agent_id", "run_id", "actor_id"]
+        common_fields = [
+            "user_id",
+            "agent_id",
+            "run_id",
+            "actor_id",
+            "_mem0_sidecar_mutation_id",
+        ]
 
         for field in common_fields:
             try:

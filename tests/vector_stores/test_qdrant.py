@@ -95,6 +95,13 @@ class TestQdrant(unittest.TestCase):
             sparse_vectors_config=expected_sparse_config,
         )
 
+    def test_remote_collection_indexes_mutation_marker(self):
+        self.client_mock.create_payload_index.assert_any_call(
+            collection_name="test_collection",
+            field_name="_mem0_sidecar_mutation_id",
+            field_schema="keyword",
+        )
+
     def test_insert(self):
         vectors = [[0.1, 0.2], [0.3, 0.4]]
         payloads = [{"key": "value1"}, {"key": "value2"}]
