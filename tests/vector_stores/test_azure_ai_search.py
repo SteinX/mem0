@@ -32,6 +32,7 @@ def mock_clients():
         mock_search_client.upload_documents = Mock()
         mock_search_client.upload_documents.return_value = [{"status": True, "id": "doc1"}]
         mock_search_client.search = Mock()
+        mock_search_client.search.return_value = []
         mock_search_client.delete_documents = Mock()
         mock_search_client.delete_documents.return_value = [{"status": True, "id": "doc1"}]
         mock_search_client.merge_or_upload_documents = Mock()
@@ -658,8 +659,7 @@ def test_init_sets_compression_type_to_none_if_unspecified(mock_clients):
     assert instance.compression_type == "none"
 
 
-def test_init_does_not_create_col_if_collection_exists(mock_clients):
-    """Test __init__ does not call create_col if collection already exists."""
+def test_init_updates_schema_if_collection_exists(mock_clients):
     mock_search_client, mock_index_client, _ = mock_clients
     # Simulate collection already exists
     mock_index_client.list_index_names.return_value = ["test-index"]
@@ -670,8 +670,7 @@ def test_init_does_not_create_col_if_collection_exists(mock_clients):
         api_key="test-api-key",
         embedding_model_dims=16,
     )
-    # create_or_update_index should not be called since collection exists
-    mock_index_client.create_or_update_index.assert_not_called()
+    mock_index_client.create_or_update_index.assert_called_once()
 
 
 def test_init_calls_create_col_if_collection_missing(mock_clients):
@@ -687,6 +686,33 @@ def test_init_calls_create_col_if_collection_missing(mock_clients):
         embedding_model_dims=16,
     )
     mock_index_client.create_or_update_index.assert_called_once()
+
+
+def test_mutation_marker_is_filterable_persisted_and_backfilled(azure_ai_search_instance):
+    instance, search_client, index_client = azure_ai_search_instance
+    marker = "a" * 64
+    index = index_client.create_or_update_index.call_args.args[0]
+    marker_field = next(field for field in index.fields if field.name == "_mem0_sidecar_mutation_id")
+    assert marker_field.filterable is True
+
+    document = instance._generate_document(
+        [0.1, 0.2, 0.3],
+        {"data": "memory", "_mem0_sidecar_mutation_id": marker},
+        "memory-1",
+    )
+    assert document["_mem0_sidecar_mutation_id"] == marker
+
+    search_client.search.return_value = [
+        {
+            "id": "legacy",
+            "payload": json.dumps({"_mem0_sidecar_mutation_id": marker}),
+        }
+    ]
+    search_client.merge_or_upload_documents.reset_mock()
+    instance._backfill_mutation_marker_field()
+    search_client.merge_or_upload_documents.assert_called_once_with(
+        documents=[{"id": "legacy", "_mem0_sidecar_mutation_id": marker}]
+    )
 
 
 def test_build_filter_rejects_dict_value(azure_ai_search_instance):

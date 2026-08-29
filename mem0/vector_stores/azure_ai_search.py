@@ -33,6 +33,9 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+_MUTATION_MARKER_KEY = "_mem0_sidecar_mutation_id"
+_MUTATION_MARKER_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+
 
 class OutputData(BaseModel):
     id: Optional[str]
@@ -98,9 +101,8 @@ class AzureAISearch(VectorStoreBase):
         self.search_client._client._config.user_agent_policy.add_user_agent("mem0")
         self.index_client._client._config.user_agent_policy.add_user_agent("mem0")
 
-        collections = self.list_cols()
-        if collection_name not in collections:
-            self.create_col()
+        self.create_col()
+        self._backfill_mutation_marker_field()
 
     def create_col(self):
         """Create a new index in Azure AI Search."""
@@ -137,6 +139,7 @@ class AzureAISearch(VectorStoreBase):
             SimpleField(name="user_id", type=SearchFieldDataType.String, filterable=True),
             SimpleField(name="run_id", type=SearchFieldDataType.String, filterable=True),
             SimpleField(name="agent_id", type=SearchFieldDataType.String, filterable=True),
+            SimpleField(name=_MUTATION_MARKER_KEY, type=SearchFieldDataType.String, filterable=True),
             SearchField(
                 name="vector",
                 type=vector_type,
@@ -167,7 +170,37 @@ class AzureAISearch(VectorStoreBase):
         for field in ["user_id", "run_id", "agent_id"]:
             if field in payload:
                 document[field] = payload[field]
+        document[_MUTATION_MARKER_KEY] = payload.get(_MUTATION_MARKER_KEY, "")
         return document
+
+    def _backfill_mutation_marker_field(self):
+        documents = []
+        results = self.search_client.search(
+            search_text="*",
+            filter=f"{_MUTATION_MARKER_KEY} eq null",
+            select=["id", "payload"],
+        )
+        for result in results:
+            try:
+                payload = json.loads(extract_json(result["payload"]))
+            except (AttributeError, json.JSONDecodeError, TypeError):
+                payload = {}
+            marker = payload.get(_MUTATION_MARKER_KEY) if isinstance(payload, dict) else None
+            documents.append(
+                {
+                    "id": result["id"],
+                    _MUTATION_MARKER_KEY: (
+                        marker
+                        if isinstance(marker, str) and _MUTATION_MARKER_PATTERN.fullmatch(marker)
+                        else ""
+                    ),
+                }
+            )
+            if len(documents) == 1000:
+                self.search_client.merge_or_upload_documents(documents=documents)
+                documents = []
+        if documents:
+            self.search_client.merge_or_upload_documents(documents=documents)
 
     # Note: Explicit "insert" calls may later be decoupled from memory management decisions.
     def insert(self, vectors, payloads=None, ids=None):
@@ -310,7 +343,7 @@ class AzureAISearch(VectorStoreBase):
         if payload is not None:
             json_payload = json.dumps(payload)
             document["payload"] = json_payload
-            for field in ["user_id", "run_id", "agent_id"]:
+            for field in ["user_id", "run_id", "agent_id", _MUTATION_MARKER_KEY]:
                 document[field] = payload.get(field)
         response = self.search_client.merge_or_upload_documents(documents=[document])
         for doc in response:

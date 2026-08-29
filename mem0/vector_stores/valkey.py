@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from datetime import datetime
 from typing import Dict
 
@@ -14,6 +15,10 @@ from mem0.vector_stores.base import VectorStoreBase
 
 logger = logging.getLogger(__name__)
 
+_MUTATION_MARKER_KEY = "_mem0_sidecar_mutation_id"
+_MUTATION_MARKER_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+_MUTATION_MARKER_MIGRATION = "mutation-marker-tag-v1"
+
 # Default fields for the Valkey index
 DEFAULT_FIELDS = [
     {"name": "memory_id", "type": "tag"},
@@ -21,6 +26,7 @@ DEFAULT_FIELDS = [
     {"name": "agent_id", "type": "tag"},
     {"name": "run_id", "type": "tag"},
     {"name": "user_id", "type": "tag"},
+    {"name": _MUTATION_MARKER_KEY, "type": "tag"},
     {"name": "memory", "type": "text"},  # TEXT for full-text search over memory content (see #5006)
     {"name": "metadata", "type": "tag"},  # Using TAG instead of TEXT for Valkey compatibility
     {"name": "created_at", "type": "numeric"},
@@ -110,6 +116,7 @@ class ValkeyDB(VectorStoreBase):
 
         # Create the index schema
         self._create_index(embedding_model_dims)
+        self._backfill_mutation_marker_tags()
 
     def _build_index_schema(self, collection_name, embedding_dims, distance_metric, prefix):
         """
@@ -181,6 +188,8 @@ class ValkeyDB(VectorStoreBase):
             "TAG",
             "user_id",
             "TAG",
+            _MUTATION_MARKER_KEY,
+            "TAG",
             "memory",
             "TEXT",
             "metadata",
@@ -220,7 +229,16 @@ class ValkeyDB(VectorStoreBase):
 
         # Check if the index already exists
         try:
-            self.client.ft(self.collection_name).info()
+            info = self.client.ft(self.collection_name).info()
+            if isinstance(info, dict) and _MUTATION_MARKER_KEY not in str(info):
+                self.client.execute_command(
+                    "FT.ALTER",
+                    self.collection_name,
+                    "SCHEMA",
+                    "ADD",
+                    _MUTATION_MARKER_KEY,
+                    "TAG",
+                )
             return
         except ResponseError as e:
             if "not found" not in str(e).lower():
@@ -241,6 +259,35 @@ class ValkeyDB(VectorStoreBase):
         except Exception as e:
             logger.exception(f"Error creating index {self.collection_name}: {e}")
             raise
+
+    def _backfill_mutation_marker_tags(self):
+        state_key = f"mem0:migrations:{self.collection_name}:{_MUTATION_MARKER_MIGRATION}"
+        lock_key = f"{state_key}:lock"
+        if self.client.get(state_key) in {b"done", "done"}:
+            return
+        if not self.client.set(lock_key, "1", nx=True, ex=900):
+            return
+        try:
+            for key in self.client.scan_iter(match=f"{self.prefix}:*", count=500):
+                values = self.client.hgetall(key)
+                raw_metadata = values.get(b"metadata", values.get("metadata"))
+                if raw_metadata is None:
+                    continue
+                try:
+                    if isinstance(raw_metadata, bytes):
+                        raw_metadata = raw_metadata.decode("utf-8")
+                    metadata = json.loads(extract_json(raw_metadata))
+                except (AttributeError, json.JSONDecodeError, TypeError, UnicodeDecodeError):
+                    logger.warning("Skipping invalid Valkey metadata while backfilling mutation markers for key %r", key)
+                    continue
+                if not isinstance(metadata, dict):
+                    continue
+                marker = metadata.get(_MUTATION_MARKER_KEY)
+                if isinstance(marker, str) and _MUTATION_MARKER_PATTERN.fullmatch(marker):
+                    self.client.hset(key, mapping={_MUTATION_MARKER_KEY: marker})
+            self.client.set(state_key, "done")
+        finally:
+            self.client.delete(lock_key)
 
     def create_col(self, name=None, vector_size=None, distance=None):
         """
@@ -318,7 +365,7 @@ class ValkeyDB(VectorStoreBase):
                 }
 
                 # Add optional fields
-                for field in ["agent_id", "run_id", "user_id"]:
+                for field in ["agent_id", "run_id", "user_id", _MUTATION_MARKER_KEY]:
                     if field in payload:
                         hash_data[field] = payload[field]
 
@@ -416,7 +463,7 @@ class ValkeyDB(VectorStoreBase):
                 payload["updated_at"] = self._format_timestamp(int(doc.updated_at), self.timezone)
 
             # Add optional fields
-            for field in ["agent_id", "run_id", "user_id"]:
+            for field in ["agent_id", "run_id", "user_id", _MUTATION_MARKER_KEY]:
                 if hasattr(doc, field):
                     payload[field] = getattr(doc, field)
 
@@ -525,7 +572,7 @@ class ValkeyDB(VectorStoreBase):
                 hash_data["updated_at"] = int(datetime.fromisoformat(payload["updated_at"]).timestamp())
 
             # Add optional fields
-            for field in ["agent_id", "run_id", "user_id"]:
+            for field in ["agent_id", "run_id", "user_id", _MUTATION_MARKER_KEY]:
                 if field in payload:
                     hash_data[field] = payload[field]
 

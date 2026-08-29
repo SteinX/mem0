@@ -29,6 +29,8 @@ from mem0.vector_stores.base import VectorStoreBase
 
 logger = logging.getLogger(__name__)
 
+_MUTATION_MARKER_KEY = "_mem0_sidecar_mutation_id"
+
 
 class MemoryResult(BaseModel):
     id: Optional[str] = None
@@ -199,6 +201,16 @@ class Databricks(VectorStoreBase):
                     position=9,
                 )
             )
+        self.columns.append(
+            ColumnInfo(
+                name=_MUTATION_MARKER_KEY,
+                type_name=ColumnTypeName.STRING,
+                type_text="string",
+                type_json='{"type":"string"}',
+                comment="Sidecar mutation marker",
+                position=len(self.columns),
+            )
+        )
         self.column_names = [col.name for col in self.columns]
 
         # Initialize Databricks workspace client
@@ -234,6 +246,7 @@ class Databricks(VectorStoreBase):
 
         # Get the warehouse ID by name
         self.warehouse_id = next((w.id for w in self.client.warehouses.list() if w.name == warehouse_name), None)
+        self._ensure_mutation_marker_column()
 
         # Initialize endpoint (required in Databricks)
         self._ensure_endpoint_exists()
@@ -242,6 +255,26 @@ class Databricks(VectorStoreBase):
         collections = self.list_cols()
         if self.fully_qualified_index_name not in collections:
             self.create_col()
+
+    def _ensure_mutation_marker_column(self):
+        if not self.client.tables.exists(self.fully_qualified_table_name).table_exists:
+            return
+        table = self.client.tables.get(self.fully_qualified_table_name)
+        if any(column.name == _MUTATION_MARKER_KEY for column in (table.columns or [])):
+            return
+        response = self.client.statement_execution.execute_statement(
+            statement=(
+                f"ALTER TABLE {self.fully_qualified_table_name} "
+                f"ADD COLUMNS ({_MUTATION_MARKER_KEY} STRING)"
+            ),
+            warehouse_id=self.warehouse_id,
+            wait_timeout="30s",
+        )
+        if response.status.state.value != "SUCCEEDED":
+            raise RuntimeError(
+                f"Failed to add {_MUTATION_MARKER_KEY} to {self.fully_qualified_table_name}: "
+                f"{response.status.error}"
+            )
 
     def _ensure_endpoint_exists(self):
         """Ensure the vector search endpoint exists, create if it doesn't."""
@@ -782,6 +815,47 @@ class Databricks(VectorStoreBase):
             logger.error(f"Failed to get info for index '{name or self.index_name}': {e}")
             raise
 
+    def _memory_results_from_rows(self, data_array, columns):
+        memory_results = []
+        for row in data_array:
+            row_dict = dict(zip(columns, row)) if isinstance(row, (list, tuple)) else row
+            payload = {k: row_dict.get(k) for k in columns}
+            if payload.get("metadata"):
+                try:
+                    payload.update(json.loads(payload["metadata"]))
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            memory_id = row_dict.get("memory_id") or row_dict.get("id")
+            payload["data"] = payload["memory"]
+            memory_results.append(MemoryResult(id=memory_id, payload=payload))
+        return [memory_results]
+
+    def _list_exact_mutation_marker(self, filters, top_k):
+        supported_filters = {"user_id", "agent_id", "run_id", _MUTATION_MARKER_KEY}
+        clauses = []
+        params = []
+        for key, value in filters.items():
+            if key not in supported_filters:
+                raise ValueError(f"Unsupported exact marker filter: {key!r}")
+            clauses.append(f"{key} = :filter_{key}")
+            params.append(StatementParameterListItem(name=f"filter_{key}", value=str(value)))
+        columns = self.column_names
+        statement = (
+            f"SELECT {', '.join(columns)} FROM {self.fully_qualified_table_name} "
+            f"WHERE {' AND '.join(clauses)} LIMIT {int(top_k or 100)}"
+        )
+        response = self.client.statement_execution.execute_statement(
+            statement=statement,
+            warehouse_id=self.warehouse_id,
+            wait_timeout="30s",
+            parameters=params,
+        )
+        if response.status.state.value != "SUCCEEDED":
+            raise RuntimeError(f"Exact marker lookup failed: {response.status.error}")
+        result = response.result
+        data_array = result.data_array if result and result.data_array else []
+        return self._memory_results_from_rows(data_array, columns)
+
     def list(self, filters: dict = None, top_k: int = None) -> list[MemoryResult]:
         """
         List all recent created memories from the vector store.
@@ -794,6 +868,8 @@ class Databricks(VectorStoreBase):
             List containing list of MemoryResult objects.
         """
         try:
+            if filters and _MUTATION_MARKER_KEY in filters:
+                return self._list_exact_mutation_marker(filters, top_k)
             filters_json = json.dumps(filters) if filters else None
             num_results = top_k or 100
             columns = self.column_names
@@ -817,20 +893,7 @@ class Databricks(VectorStoreBase):
             result_data = sdk_results.result if hasattr(sdk_results, "result") else sdk_results
             data_array = result_data.data_array if hasattr(result_data, "data_array") else []
 
-            memory_results = []
-            for row in data_array:
-                row_dict = dict(zip(columns, row)) if isinstance(row, (list, tuple)) else row
-                payload = {k: row_dict.get(k) for k in columns}
-                # Parse metadata if present
-                if "metadata" in payload and payload["metadata"]:
-                    try:
-                        payload.update(json.loads(payload["metadata"]))
-                    except Exception:
-                        pass
-                memory_id = row_dict.get("memory_id") or row_dict.get("id")
-                payload['data'] = payload['memory']
-                memory_results.append(MemoryResult(id=memory_id, payload=payload))
-            return [memory_results]
+            return self._memory_results_from_rows(data_array, columns)
         except Exception as e:
             logger.error(f"Failed to list memories: {e}")
             return []

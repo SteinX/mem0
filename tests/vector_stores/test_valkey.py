@@ -1043,6 +1043,38 @@ def test_build_index_schema_indexes_memory_as_text(valkey_db):
     assert ["memory", "TAG"] != cmd[memory_idx : memory_idx + 2]
 
 
+def test_mutation_marker_schema_write_and_legacy_backfill(valkey_db, mock_valkey_client):
+    marker = "a" * 64
+    cmd = valkey_db._build_index_schema(
+        collection_name="test_collection",
+        embedding_dims=1536,
+        distance_metric="COSINE",
+        prefix="mem0:test_collection",
+    )
+    marker_idx = cmd.index("_mem0_sidecar_mutation_id")
+    assert cmd[marker_idx + 1] == "TAG"
+
+    valkey_db.insert(
+        vectors=[[0.1] * 1536],
+        payloads=[{"data": "memory", "_mem0_sidecar_mutation_id": marker}],
+        ids=["memory-1"],
+    )
+    assert mock_valkey_client.hset.call_args.kwargs["mapping"]["_mem0_sidecar_mutation_id"] == marker
+
+    mock_valkey_client.reset_mock()
+    mock_valkey_client.get.return_value = None
+    mock_valkey_client.set.return_value = True
+    mock_valkey_client.scan_iter.return_value = [b"mem0:test_collection:legacy"]
+    mock_valkey_client.hgetall.return_value = {
+        b"metadata": json.dumps({"_mem0_sidecar_mutation_id": marker}).encode()
+    }
+    valkey_db._backfill_mutation_marker_tags()
+    mock_valkey_client.hset.assert_called_once_with(
+        b"mem0:test_collection:legacy",
+        mapping={"_mem0_sidecar_mutation_id": marker},
+    )
+
+
 def test_escape_tag_value_wildcards(valkey_db):
     """Wildcard characters in filter values must be escaped to prevent query injection."""
     assert "\\*" in valkey_db._escape_tag_value("*")

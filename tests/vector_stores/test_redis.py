@@ -159,6 +159,8 @@ def test_backfill_indexes_mutation_marker_from_legacy_metadata():
 
     db, mock_index = _make_redis_db()
     db.client = MagicMock()
+    db.client.get.return_value = None
+    db.client.set.return_value = True
     db.client.scan_iter.return_value = [
         b"mem0:test:legacy",
         b"mem0:test:invalid",
@@ -176,6 +178,10 @@ def test_backfill_indexes_mutation_marker_from_legacy_metadata():
         b"mem0:test:legacy",
         mapping={"_mem0_sidecar_mutation_id": marker},
     )
+    state_key = "mem0:migrations:test:mutation-marker-tag-v1"
+    db.client.set.assert_any_call(f"{state_key}:lock", "1", nx=True, ex=900)
+    db.client.set.assert_any_call(state_key, "done")
+    db.client.delete.assert_called_once_with(f"{state_key}:lock")
 
     mock_index.search.return_value = MagicMock(
         docs=[
@@ -203,6 +209,11 @@ def test_backfill_indexes_mutation_marker_from_legacy_metadata():
     assert results[0][0].id == "legacy"
     assert results[0][0].payload["_mem0_sidecar_mutation_id"] == marker
     assert "@_mem0_sidecar_mutation_id" in mock_index.search.call_args.args[0].query_string()
+
+    db.client.scan_iter.reset_mock()
+    db.client.get.return_value = b"done"
+    db._backfill_mutation_marker_tags()
+    db.client.scan_iter.assert_not_called()
 
 
 def test_create_col_keeps_distinct_dims_across_instances():

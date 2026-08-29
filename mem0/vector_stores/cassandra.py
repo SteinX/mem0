@@ -450,7 +450,6 @@ class CassandraDB(VectorStoreBase):
             query = f"""
                 SELECT id, vector, payload
                 FROM {self.keyspace}.{self.collection_name}
-                LIMIT {top_k}
             """
             rows = self.session.execute(query)
 
@@ -473,6 +472,8 @@ class CassandraDB(VectorStoreBase):
                         payload=json.loads(row.payload) if row.payload else {}
                     )
                 )
+                if len(results) >= top_k:
+                    break
 
             return [results]
         except Exception as e:
@@ -500,4 +501,3 @@ class CassandraDB(VectorStoreBase):
                 logger.info("Cassandra cluster connection closed")
         except Exception:
             pass
-

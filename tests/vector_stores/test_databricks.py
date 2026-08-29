@@ -171,6 +171,41 @@ def test_insert_generates_sql(db_instance_direct, mock_workspace_client):
     assert id_param.value == "id1"
 
 
+def test_insert_and_exact_list_use_mutation_marker_column(db_instance_delta, mock_workspace_client):
+    marker = "a" * 64
+    db_instance_delta.insert(
+        vectors=[[0.1, 0.2]],
+        payloads=[{"data": "memory", "user_id": "alice", "_mem0_sidecar_mutation_id": marker}],
+        ids=["memory-1"],
+    )
+    insert_params = {
+        parameter.name: parameter.value
+        for parameter in mock_workspace_client.statement_execution.execute_statement.call_args.kwargs["parameters"]
+    }
+    assert insert_params["_mem0_sidecar_mutation_id_0"] == marker
+
+    row_values = {
+        "memory_id": "memory-1",
+        "memory": "memory",
+        "user_id": "alice",
+        "_mem0_sidecar_mutation_id": marker,
+    }
+    mock_workspace_client.statement_execution.execute_statement.return_value = SimpleNamespace(
+        status=_make_status(),
+        result=SimpleNamespace(
+            data_array=[[row_values.get(column) for column in db_instance_delta.column_names]]
+        ),
+    )
+    results = db_instance_delta.list(
+        filters={"user_id": "alice", "_mem0_sidecar_mutation_id": marker},
+        top_k=1000,
+    )
+    call = mock_workspace_client.statement_execution.execute_statement.call_args.kwargs
+    assert "_mem0_sidecar_mutation_id = :filter__mem0_sidecar_mutation_id" in call["statement"]
+    assert "LIMIT 1000" in call["statement"]
+    assert results[0][0].payload["_mem0_sidecar_mutation_id"] == marker
+
+
 # ---------------------- Search Tests ---------------------- #
 
 
