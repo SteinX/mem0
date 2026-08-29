@@ -390,6 +390,7 @@ def add_memory(memory_create: MemoryCreate, _auth=Depends(verify_auth)):
 
 
 DEFAULT_ALL_MEMORIES_LIMIT = 1000
+MUTATION_MARKER_LOOKUP_LIMIT = 1000
 
 
 def _read_all_memories_limit() -> int:
@@ -483,12 +484,26 @@ def get_all_memories(
         max_length=64,
         pattern="^[0-9a-f]{64}$",
     ),
-    top_k: Optional[int] = Query(None, ge=0, le=ALL_MEMORIES_LIMIT),
+    top_k: Optional[int] = Query(
+        None,
+        ge=0,
+        le=max(ALL_MEMORIES_LIMIT, MUTATION_MARKER_LOOKUP_LIMIT),
+    ),
     show_expired: bool = Query(False),
     _auth=Depends(verify_auth),
 ):
     """Retrieve stored memories. Lists all memories when no identifier is provided (admin only)."""
     try:
+        request_limit = (
+            MUTATION_MARKER_LOOKUP_LIMIT
+            if mutation_marker is not None
+            else ALL_MEMORIES_LIMIT
+        )
+        if top_k is not None and top_k > request_limit:
+            raise HTTPException(
+                status_code=422,
+                detail=f"top_k must be less than or equal to {request_limit}",
+            )
         filters: Dict[str, str] = {}
         for key, value in {
             "user_id": user_id,
@@ -516,7 +531,7 @@ def get_all_memories(
                 "_mem0_sidecar_mutation_id": mutation_marker,
             }
             return _list_all_memories(
-                limit=top_k if top_k is not None else ALL_MEMORIES_LIMIT,
+                limit=top_k if top_k is not None else MUTATION_MARKER_LOOKUP_LIMIT,
                 filters=marker_filters,
             )
         params: Dict[str, Any] = {"filters": filters}
