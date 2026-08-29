@@ -10,7 +10,7 @@ WORKDIR /app/packages
 COPY pyproject.toml .
 COPY README.md .
 COPY mem0 ./mem0
-RUN pip install --no-cache-dir -e .
+RUN pip install --no-cache-dir .
 
 # Return to app directory and copy server code
 WORKDIR /app
