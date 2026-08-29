@@ -326,6 +326,19 @@ export class Qdrant implements VectorStore {
       if (!this._hasBm25Slot) {
         throw error;
       }
+      const details = (() => {
+        if (error instanceof Error) {
+          return error.message;
+        }
+        try {
+          return JSON.stringify(error);
+        } catch {
+          return String(error);
+        }
+      })();
+      if (!/inference/i.test(details)) {
+        throw error;
+      }
       this._hasBm25Slot = false;
       console.warn(
         `Qdrant rejected the server-side BM25 vector for collection '${this.collectionName}'; ` +

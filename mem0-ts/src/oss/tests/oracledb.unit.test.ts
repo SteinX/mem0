@@ -194,6 +194,17 @@ describe("buildWhereClause", () => {
 });
 
 describe("OracleAIVectorSearch config validation", () => {
+  it("derives a quoted default index name from a quoted collection", async () => {
+    const calls: Call[] = [];
+    const store = makeStore(calls, [], { collectionName: '"App"."Mem0"' });
+
+    await store.initialize();
+
+    expect(calls.map((call) => call.sql).join("\n")).toContain(
+      'CREATE VECTOR INDEX IF NOT EXISTS "App"."Mem0_VEC_IDX" ON "App"."Mem0"',
+    );
+  });
+
   it("requires connectionParams or client", () => {
     expect(() => new OracleAIVectorSearch({} as any)).toThrow(
       /connectionParams.*client/,

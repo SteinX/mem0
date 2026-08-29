@@ -125,6 +125,9 @@ export default class MemoryClient {
     this.projectId = null;
     this.identityCacheMax =
       options.identityCacheMax ?? IDENTITY_CACHE_MAX_DEFAULT;
+    if (!Number.isInteger(this.identityCacheMax) || this.identityCacheMax < 0) {
+      throw new Error("identityCacheMax must be a non-negative integer");
+    }
 
     this.headers = {
       Authorization: `Token ${this.apiKey}`,
@@ -151,12 +154,17 @@ export default class MemoryClient {
     let shared = identityByCredentials.get(credentials);
     if (!shared) {
       shared = this._initializeClient();
-      if (identityByCredentials.size >= this.identityCacheMax) {
+      while (
+        this.identityCacheMax > 0 &&
+        identityByCredentials.size >= this.identityCacheMax
+      ) {
         identityByCredentials.delete(
           identityByCredentials.keys().next().value!,
         );
       }
-      identityByCredentials.set(credentials, shared);
+      if (this.identityCacheMax > 0) {
+        identityByCredentials.set(credentials, shared);
+      }
       // A failed ping must not be cached, or the process never recovers.
       shared.then((identity) => {
         if (!identity.telemetryId) identityByCredentials.delete(credentials);

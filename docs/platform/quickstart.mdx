@@ -42,6 +42,7 @@ npm install -g @mem0/cli
 ```
 
 </CodeGroup>
+
 </Step>
 
 <Step title="Set your API key">
@@ -66,6 +67,8 @@ mem0 init --api-key "your-api-key"
 ```
 
 </CodeGroup>
+
+For long-running TypeScript processes, `identityCacheMax` controls how many API-key identities are cached per process. It defaults to `50`; set it to a non-negative integer, or `0` to disable identity caching.
 </Step>
 
 <Step title="Add a memory">

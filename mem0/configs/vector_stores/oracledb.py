@@ -23,6 +23,12 @@ def _quote_identifier(name: str) -> str:
     return ".".join(groups)
 
 
+def _default_index_name(collection_name: str) -> str:
+    segments = re.findall(r'"([^"]+)"', _quote_identifier(collection_name))
+    segments[-1] = f"{segments[-1]}_VEC_IDX"
+    return ".".join(f'"{segment}"' for segment in segments)
+
+
 class HnswParams(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
@@ -79,11 +85,10 @@ class OracleAIVectorSearchConfig(BaseModel):
         if not self.connection_params and not self.client:
             raise ValueError("Must provide at least one of `connection_params` and `client`")
 
-        if self.index_name is None:
-            self.index_name = f"{self.collection_name}_VEC_IDX"
-
-        self.index_name = _quote_identifier(self.index_name)
         self.collection_name = _quote_identifier(self.collection_name)
+        self.index_name = (
+            _quote_identifier(self.index_name) if self.index_name else _default_index_name(self.collection_name)
+        )
 
         if self.index_parameters is not None:
             parameter_model = HnswParams if self.index_type == "HNSW" else IvfParams

@@ -440,6 +440,23 @@ describe("Qdrant BM25 keyword search — query construction & filters", () => {
 });
 
 describe("Qdrant BM25 keyword search — reactive downgrade on upsert failure", () => {
+  it("propagates non-inference failures without disabling bm25", async () => {
+    const upsert = jest
+      .fn()
+      .mockRejectedValueOnce(new Error("network timeout"))
+      .mockResolvedValueOnce(undefined);
+    const client = buildMockClient({ upsert });
+    const store = makeStore(client);
+    await store.initialize();
+
+    await expect(
+      store.insert([[0.1]], ["mem-1"], [{ data: "hello" }]),
+    ).rejects.toThrow("network timeout");
+    await store.insert([[0.2]], ["mem-2"], [{ data: "still hybrid" }]);
+
+    expect(upsert.mock.calls[1][1].points[0].vector.bm25).toBeDefined();
+  });
+
   it("insert(): upsert fails once, retries with plain dense vector, disables bm25", async () => {
     const upsert = jest
       .fn()

@@ -175,6 +175,51 @@ describe("MemoryClient - identity cache overflow", () => {
       `/api/v1/orgs/organizations/${TEST_ORG_ID}/`,
     );
   });
+
+  test("zero disables credential caching", async () => {
+    const mock = projectOk();
+    const Client = isolatedClient();
+
+    await new Client({
+      apiKey: "uncached-key",
+      identityCacheMax: 0,
+    }).getProject({ fields: [] });
+    await new Client({
+      apiKey: "uncached-key",
+      identityCacheMax: 0,
+    }).getProject({ fields: [] });
+
+    expect(pingCount(mock)).toBe(2);
+  });
+
+  test("a lower maximum evicts all excess cached identities", async () => {
+    const mock = projectOk();
+    const Client = isolatedClient();
+
+    for (const apiKey of ["cached-a", "cached-b", "cached-c"]) {
+      await new Client({ apiKey, identityCacheMax: 3 }).getProject({
+        fields: [],
+      });
+    }
+    await new Client({ apiKey: "cached-d", identityCacheMax: 1 }).getProject({
+      fields: [],
+    });
+    await new Client({ apiKey: "cached-c", identityCacheMax: 1 }).getProject({
+      fields: [],
+    });
+
+    expect(pingCount(mock)).toBe(5);
+  });
+
+  test("rejects invalid cache maxima", () => {
+    const Client = isolatedClient();
+    expect(() => new Client({ apiKey: "key", identityCacheMax: -1 })).toThrow(
+      /non-negative integer/,
+    );
+    expect(() => new Client({ apiKey: "key", identityCacheMax: 1.5 })).toThrow(
+      /non-negative integer/,
+    );
+  });
 });
 
 describe("MemoryClient - unresolved identity", () => {

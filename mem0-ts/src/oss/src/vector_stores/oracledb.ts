@@ -53,6 +53,14 @@ export function quoteIdentifier(name: string): string {
     .join(".");
 }
 
+function defaultIndexName(collectionName: string): string {
+  const segments = [
+    ...quoteIdentifier(collectionName).matchAll(/"([^"]+)"/g),
+  ].map((match) => match[1]);
+  segments[segments.length - 1] += "_VEC_IDX";
+  return segments.map((segment) => `"${segment}"`).join(".");
+}
+
 function jsonPath(metadataKey: string): string {
   if (!METADATA_KEY_RE.test(metadataKey)) {
     throw new Error(
@@ -331,10 +339,11 @@ export class OracleAIVectorSearch implements VectorStore {
       );
     }
 
-    this.collectionName = quoteIdentifier(config.collectionName || "mem0");
-    this.indexName = quoteIdentifier(
-      config.indexName || `${config.collectionName || "mem0"}_VEC_IDX`,
-    );
+    const collectionName = config.collectionName || "mem0";
+    this.collectionName = quoteIdentifier(collectionName);
+    this.indexName = config.indexName
+      ? quoteIdentifier(config.indexName)
+      : defaultIndexName(collectionName);
 
     this.embeddingModelDims = config.embeddingModelDims ?? 1536;
     if (

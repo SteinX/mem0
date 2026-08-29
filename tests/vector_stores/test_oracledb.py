@@ -278,6 +278,19 @@ def test_index_accuracy_rejects_zero():
         )
 
 
+@pytest.mark.parametrize(
+    ("collection_name", "expected_index_name"),
+    [
+        ('"MEM0"', '"MEM0_VEC_IDX"'),
+        ('"SCHEMA"."MEM0"', '"SCHEMA"."MEM0_VEC_IDX"'),
+    ],
+)
+def test_default_index_name_supports_quoted_collection(collection_name, expected_index_name):
+    config = OracleAIVectorSearchConfig(collection_name=collection_name, client=object())
+
+    assert config.index_name == expected_index_name
+
+
 def test_index_parameters_canonicalize_int_subclasses():
     class FormattedInt(int):
         def __format__(self, format_spec):
