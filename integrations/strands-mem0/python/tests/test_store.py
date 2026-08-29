@@ -214,6 +214,19 @@ async def test_add_messages_renders_content_blocks(mock_client):
     mock_client.store_messages.assert_called_once_with(
         [{"role": "user", "content": "I love hiking"}, {"role": "assistant", "content": "Noted!"}],
         {"user_id": "alex"},
+        None,
+    )
+
+
+async def test_add_messages_uses_store_default_metadata(mock_client):
+    store = make_store(mock_client, metadata={"team": "growth"})
+
+    await store.add_messages([{"role": "user", "content": "Remember this"}])
+
+    mock_client.store_messages.assert_called_once_with(
+        [{"role": "user", "content": "Remember this"}],
+        {"user_id": "alex"},
+        {"team": "growth"},
     )
 
 

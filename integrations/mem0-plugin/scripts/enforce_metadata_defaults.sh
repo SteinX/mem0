@@ -40,7 +40,8 @@ esac
 
 TOOL_INPUT=$(echo "$INPUT" | jq -r '.tool_input // "{}"' 2>/dev/null)
 
-_PATCH_OUT="/tmp/mem0_enforce_$$"
+_PATCH_OUT=$(mktemp "${TMPDIR:-/tmp}/mem0_enforce.XXXXXX") || exit 0
+chmod 600 "$_PATCH_OUT"
 trap 'rm -f "$_PATCH_OUT"' EXIT
 _MEM0_TOOL_INPUT="$TOOL_INPUT" \
 _MEM0_USER_ID="${MEM0_RESOLVED_USER_ID:-}" \

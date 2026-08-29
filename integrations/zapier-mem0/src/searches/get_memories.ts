@@ -2,7 +2,13 @@ import type { ZObject, Bundle, Memory } from '../types';
 
 const perform = async (z: ZObject, bundle: Bundle): Promise<Memory[]> => {
 	const body: Record<string, unknown> = {};
-	if (bundle.inputData.user_id) body.filters = { user_id: bundle.inputData.user_id };
+	const speakers = [
+		bundle.inputData.user_id && { user_id: bundle.inputData.user_id },
+		bundle.inputData.agent_id && { agent_id: bundle.inputData.agent_id },
+	].filter(Boolean);
+	const clauses: unknown[] = speakers.length > 1 ? [{ OR: speakers }] : speakers;
+	if (bundle.inputData.run_id) clauses.push({ run_id: bundle.inputData.run_id });
+	if (clauses.length > 0) body.filters = clauses.length === 1 ? clauses[0] : { AND: clauses };
 
 	const response = await z.request({
 		url: '/v3/memories/',
@@ -29,6 +35,8 @@ export default {
 		perform,
 		inputFields: [
 			{ key: 'user_id', label: 'User ID', type: 'string', required: true },
+			{ key: 'agent_id', label: 'Agent ID', type: 'string' },
+			{ key: 'run_id', label: 'Run ID', type: 'string' },
 			{
 				key: 'limit',
 				label: 'Limit',

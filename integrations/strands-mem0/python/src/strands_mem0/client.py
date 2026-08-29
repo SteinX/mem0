@@ -143,14 +143,19 @@ class Mem0ServiceClient:
         self._check_scope(scope)
         return self.mem0.add(content, metadata=metadata, infer=False, **self._write_extras(), **scope)
 
-    def store_messages(self, messages: list[dict[str, Any]], scope: dict[str, str]) -> Any:
+    def store_messages(
+        self,
+        messages: list[dict[str, Any]],
+        scope: dict[str, str],
+        metadata: dict[str, Any] | None = None,
+    ) -> Any:
         """Hand rendered conversation turns to Mem0 for server-side extraction (``infer=True``).
 
         Used by the store's ``add_messages`` sink. Mem0 extracts and de-duplicates
         facts on the server, so no client-side model call is needed.
         """
         self._check_scope(scope)
-        return self.mem0.add(messages, infer=True, **self._write_extras(), **scope)
+        return self.mem0.add(messages, metadata=metadata, infer=True, **self._write_extras(), **scope)
 
     def search_memories(self, query: str, scope: dict[str, str], top_k: int) -> list[dict[str, Any]]:
         """Semantic recall scoped to the store's entity.

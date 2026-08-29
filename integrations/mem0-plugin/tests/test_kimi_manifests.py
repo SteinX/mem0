@@ -55,13 +55,23 @@ def test_shim_exists_and_is_executable():
     assert os.access(SHIM, os.X_OK), "kimi_hook_shim.sh must be executable"
 
 
+def test_shim_uses_private_temp_files_and_denies_unapplied_updates():
+    with open(SHIM) as fh:
+        shim = fh.read()
+    assert "mktemp" in shim
+    assert "umask 077" in shim
+    assert "updatedInput != null" in shim
+    assert 'permissionDecision: "deny"' in shim
+
+
 def test_every_hook_routes_through_shim_to_a_real_script():
     hooks = _load(SUBDIR_MANIFEST)["hooks"]
     assert hooks, "no hooks declared"
     valid_events = {
         "SessionStart", "UserPromptSubmit", "PreToolUse",
-        "PostToolUse", "Stop", "PreCompact",
+        "PostToolUse",
     }
+    assert not {hook["event"] for hook in hooks} & {"Stop", "PreCompact"}
     for hook in hooks:
         assert hook["event"] in valid_events, f"unknown event {hook['event']}"
         cmd = hook["command"]

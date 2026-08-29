@@ -135,11 +135,12 @@ def test_store_messages_infers_and_tags():
     client, fake = platform_client()
 
     turns = [{"role": "user", "content": "hi"}]
-    client.store_messages(turns, {"user_id": "alex"})
+    client.store_messages(turns, {"user_id": "alex"}, {"team": "growth"})
 
     messages, kwargs = fake.add_calls[0]
     assert messages == turns
     assert kwargs["infer"] is True
+    assert kwargs["metadata"] == {"team": "growth"}
     assert kwargs["source"] == "STRANDS"
 
 
@@ -152,7 +153,7 @@ def test_oss_writes_omit_source():
     client = Mem0ServiceClient(client=fake)
 
     client.store_memory("a fact", {"user_id": "alex"}, None)
-    client.store_messages([{"role": "user", "content": "hi"}], {"user_id": "alex"})
+    client.store_messages([{"role": "user", "content": "hi"}], {"user_id": "alex"}, None)
 
     assert len(fake.add_calls) == 2
     for _, kwargs in fake.add_calls:

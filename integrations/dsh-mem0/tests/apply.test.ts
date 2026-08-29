@@ -103,7 +103,10 @@ describe("search_memory tool", () => {
     mockSearch.mockResolvedValue({ results: [] });
     const tools = applyAndCollect({ apiKey: "k", userId: "u" });
 
-    await tools.get("search_memory")!.execute({ query: "x", userId: "alice", limit: 3 }, {});
+    await tools.get("search_memory")!.execute(
+      { query: "x", userId: "alice", agentId: "shared-agent", limit: 3 },
+      {},
+    );
 
     expect(mockSearch).toHaveBeenCalledWith("x", {
       filters: { user_id: "u" },
@@ -111,19 +114,18 @@ describe("search_memory tool", () => {
     });
   });
 
-  it("keeps configured user mandatory when agent and run scopes are provided", async () => {
+  it("keeps configured user mandatory when run scope is provided", async () => {
     mockSearch.mockResolvedValue({ results: [] });
     const tools = applyAndCollect({ apiKey: "k", userId: "alice" });
 
     await tools.get("search_memory")!.execute(
-      { query: "x", agentId: "shared-agent", runId: "run-9" },
+      { query: "x", runId: "run-9" },
       {},
     );
 
     expect(mockSearch).toHaveBeenCalledWith("x", {
       filters: {
         user_id: "alice",
-        agent_id: "shared-agent",
         run_id: "run-9",
       },
       topK: 10,

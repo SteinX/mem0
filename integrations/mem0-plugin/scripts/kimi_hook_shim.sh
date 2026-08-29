@@ -51,8 +51,9 @@ export MEM0_PLATFORM="${MEM0_PLATFORM:-kimi}"
 RAW=$(cat)
 
 _TMP_BASE="${TMPDIR:-/tmp}"
-IN_FILE="$_TMP_BASE/mem0_kimi_in_$$"
-OUT_FILE="$_TMP_BASE/mem0_kimi_out_$$"
+umask 077
+IN_FILE=$(mktemp "$_TMP_BASE/mem0_kimi_in.XXXXXX") || exit 0
+OUT_FILE=$(mktemp "$_TMP_BASE/mem0_kimi_out.XXXXXX") || { rm -f "$IN_FILE"; exit 0; }
 trap 'rm -f "$IN_FILE" "$OUT_FILE"' EXIT
 
 HAVE_JQ=""
@@ -103,6 +104,11 @@ if [ -n "$OUT" ] && [ -n "$HAVE_JQ" ] && printf '%s' "$OUT" | jq -e 'type == "ob
   if printf '%s' "$OUT" | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null 2>&1; then
     # Kimi understands deny natively — pass the envelope straight through.
     printf '%s' "$OUT"
+  elif printf '%s' "$OUT" | jq -e '.hookSpecificOutput.updatedInput != null' >/dev/null 2>&1; then
+    printf '%s' "$OUT" | jq -c '{hookSpecificOutput: {
+      permissionDecision: "deny",
+      permissionDecisionReason: ("Retry the tool call with these required scoped inputs: " + (.hookSpecificOutput.updatedInput | tojson))
+    }}'
   else
     CTX=$(printf '%s' "$OUT" | jq -r '
       (.hookSpecificOutput.additionalContext

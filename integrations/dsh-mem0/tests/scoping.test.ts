@@ -6,18 +6,15 @@ describe("resolveSearchFilters (snake_case, for filters)", () => {
     expect(resolveSearchFilters({}, "default-user")).toEqual({ user_id: "default-user" });
   });
 
-  it("keeps configured user, agent, and run as mandatory filters", () => {
-    expect(
-      resolveSearchFilters({ agentId: "agent-1", runId: "run-9" }, "alice"),
-    ).toEqual({
+  it("keeps configured user and run as mandatory filters", () => {
+    expect(resolveSearchFilters({ runId: "run-9" }, "alice")).toEqual({
       user_id: "alice",
-      agent_id: "agent-1",
       run_id: "run-9",
     });
   });
 
   it("omits blank agent/run scope", () => {
-    const f = resolveSearchFilters({ agentId: "  ", runId: "run-9" }, "default");
+    const f = resolveSearchFilters({ runId: "run-9" }, "default");
     expect(f).toEqual({ user_id: "default", run_id: "run-9" });
   });
 });
@@ -27,9 +24,10 @@ describe("resolveAddParams (camelCase, for top-level add params)", () => {
     expect(resolveAddParams({}, "default-user")).toEqual({ userId: "default-user" });
   });
 
-  it("includes camelCase agent/run scope only when provided", () => {
-    expect(
-      resolveAddParams({ agentId: "agent-1", runId: "run-9" }, "alice"),
-    ).toEqual({ userId: "alice", agentId: "agent-1", runId: "run-9" });
+  it("includes camelCase run scope only when provided", () => {
+    expect(resolveAddParams({ runId: "run-9" }, "alice")).toEqual({
+      userId: "alice",
+      runId: "run-9",
+    });
   });
 });

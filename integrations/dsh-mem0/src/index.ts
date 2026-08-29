@@ -50,10 +50,6 @@ const textOutput = {
 // Optional per-call subscopes shared by both tools. The configured userId is a
 // trusted tenant boundary and is never exposed as a model-callable parameter.
 const scopeParams = {
-  agentId: {
-    type: "string",
-    description: "Optional agent scope, to partition memories by agent.",
-  },
   runId: {
     type: "string",
     description: "Optional run/session scope, to partition memories by session.",
@@ -92,8 +88,8 @@ export function apply(ctx: Context, config: Config): void {
         ...scopeParams,
       },
       output: textOutput,
-      async execute({ query, limit, agentId, runId }) {
-        const filters = resolveSearchFilters({ agentId, runId }, userId);
+      async execute({ query, limit, runId }) {
+        const filters = resolveSearchFilters({ runId }, userId);
         try {
           const topK = limit && limit > 0 ? limit : DEFAULT_SEARCH_LIMIT;
           const { results } = await client.search(query, { filters, topK });
@@ -118,8 +114,8 @@ export function apply(ctx: Context, config: Config): void {
         ...scopeParams,
       },
       output: textOutput,
-      async execute({ text, agentId, runId }) {
-        const addParams = resolveAddParams({ agentId, runId }, userId);
+      async execute({ text, runId }) {
+        const addParams = resolveAddParams({ runId }, userId);
         try {
           const result = await client.add([{ role: "user", content: text }], {
             ...addParams,

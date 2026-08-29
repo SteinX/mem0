@@ -56,16 +56,6 @@
       "matcher": "^Bash$",
       "command": "\"$KIMI_PLUGIN_ROOT/scripts/kimi_hook_shim.sh\" on_bash_output.sh",
       "timeout": 12
-    },
-    {
-      "event": "Stop",
-      "command": "\"$KIMI_PLUGIN_ROOT/scripts/kimi_hook_shim.sh\" on_stop.sh",
-      "timeout": 30
-    },
-    {
-      "event": "PreCompact",
-      "command": "\"$KIMI_PLUGIN_ROOT/scripts/kimi_hook_shim.sh\" on_pre_compact.sh",
-      "timeout": 30
     }
   ],
   "mcpServers": {

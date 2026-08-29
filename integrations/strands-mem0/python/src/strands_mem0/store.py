@@ -186,7 +186,7 @@ class Mem0MemoryStore(MemoryStore):
                 payload.append({"role": message["role"], "content": text})
         if not payload:
             return None
-        return await asyncio.to_thread(lambda: self.client.store_messages(payload, self.scope))
+        return await asyncio.to_thread(lambda: self.client.store_messages(payload, self.scope, self.metadata))
 
     @staticmethod
     def _render_content(content: Any) -> str:

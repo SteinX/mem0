@@ -14,6 +14,7 @@ services:
     volumes:
       - ./history:/app/history
       - .:/app
+      - ../mem0:/app/packages/mem0
     depends_on:
       postgres:
         condition: service_healthy

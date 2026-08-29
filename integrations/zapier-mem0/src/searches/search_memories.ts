@@ -10,7 +10,9 @@ const perform = async (z: ZObject, bundle: Bundle): Promise<Memory[]> => {
 		bundle.inputData.user_id && { user_id: bundle.inputData.user_id },
 		bundle.inputData.agent_id && { agent_id: bundle.inputData.agent_id },
 	].filter(Boolean);
-	if (speakers.length > 0) body.filters = speakers.length === 1 ? speakers[0] : { OR: speakers };
+	const clauses: unknown[] = speakers.length > 1 ? [{ OR: speakers }] : speakers;
+	if (bundle.inputData.run_id) clauses.push({ run_id: bundle.inputData.run_id });
+	if (clauses.length > 0) body.filters = clauses.length === 1 ? clauses[0] : { AND: clauses };
 
 	const response = await z.request({
 		url: '/v3/memories/search/',
@@ -35,6 +37,7 @@ export default {
 			{ key: 'query', label: 'Query', type: 'string', required: true },
 			{ key: 'user_id', label: 'User ID', type: 'string', required: true },
 			{ key: 'agent_id', label: 'Agent ID', type: 'string' },
+			{ key: 'run_id', label: 'Run ID', type: 'string' },
 			{ key: 'limit', label: 'Limit', type: 'integer', default: '50' },
 		],
 		sample: { id: '00000000-0000-0000-0000-000000000000', memory: 'User loves hiking' },

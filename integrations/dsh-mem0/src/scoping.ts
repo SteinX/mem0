@@ -2,8 +2,8 @@
  * Per-call memory scoping.
  *
  * The plugin is mounted with one default `userId`, but a single harness install
- * is bound to one configured user. Both tools accept optional `agentId` /
- * `runId` subscopes, while the model cannot override the user tenant boundary.
+ * is bound to one configured user. Both tools accept an optional `runId`
+ * subscope, while the model cannot override the user tenant boundary.
  *
  * The two call sites need different key casing, and it is deliberate rather than
  * incidental: search passes scope inside `filters`, sent to the platform raw, so
@@ -14,7 +14,6 @@
  */
 
 export interface EntityParams {
-  agentId?: string;
   runId?: string;
 }
 
@@ -27,8 +26,6 @@ export function resolveSearchFilters(
   defaultUserId: string,
 ): SearchFilters {
   const filters: SearchFilters = { user_id: defaultUserId };
-  const agentId = clean(params.agentId);
-  if (agentId) filters.agent_id = agentId;
   const runId = clean(params.runId);
   if (runId) filters.run_id = runId;
   return filters;
@@ -42,8 +39,6 @@ export function resolveAddParams(
   const out: Record<string, string> = {
     userId: defaultUserId,
   };
-  const agentId = clean(params.agentId);
-  if (agentId) out.agentId = agentId;
   const runId = clean(params.runId);
   if (runId) out.runId = runId;
   return out;

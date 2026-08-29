@@ -140,6 +140,26 @@ describe('search / get array-shape enforcement (offline)', () => {
 		});
 	});
 
+	it('search keeps run scope outside the speaker OR', async () => {
+		const z = makeZ([{ data: { results: [] } }]);
+		await searchMemories.operation.perform(z, {
+			inputData: { query: 'x', user_id: 'u1', agent_id: 'a1', run_id: 'r1' },
+		} as unknown as Bundle);
+		expect(z.requests[0].body.filters).toEqual({
+			AND: [{ OR: [{ user_id: 'u1' }, { agent_id: 'a1' }] }, { run_id: 'r1' }],
+		});
+	});
+
+	it('get_memories includes agent attribution and run scope', async () => {
+		const z = makeZ([{ data: { results: [] } }]);
+		await getMemories.operation.perform(z, {
+			inputData: { user_id: 'u1', agent_id: 'a1', run_id: 'r1' },
+		} as unknown as Bundle);
+		expect(z.requests[0].body.filters).toEqual({
+			AND: [{ OR: [{ user_id: 'u1' }, { agent_id: 'a1' }] }, { run_id: 'r1' }],
+		});
+	});
+
 	it('get_memories returns [] when the API returns neither array nor results', async () => {
 		const z = makeZ([{ data: {} }]);
 		const res = await getMemories.operation.perform(z, { inputData: { user_id: 'u1' } } as any);
