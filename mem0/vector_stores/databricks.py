@@ -212,6 +212,9 @@ class Databricks(VectorStoreBase):
             )
         )
         self.column_names = [col.name for col in self.columns]
+        self._vector_index_column_names = [
+            name for name in self.column_names if name != _MUTATION_MARKER_KEY
+        ]
 
         # Initialize Databricks workspace client
         client_config = {}
@@ -364,7 +367,7 @@ class Databricks(VectorStoreBase):
                     delta_sync_index_spec=DeltaSyncVectorIndexSpecRequest(
                         source_table=self.fully_qualified_table_name,
                         pipeline_type=self.pipeline_type,
-                        columns_to_sync=self.column_names,
+                        columns_to_sync=self._vector_index_column_names,
                         embedding_source_columns=embedding_source_columns,
                     ),
                 )
@@ -514,7 +517,7 @@ class Databricks(VectorStoreBase):
             # - query_vector: for Direct Access Index and Delta Sync Index with self-managed vectors
             query_kwargs = {
                 "index_name": self.fully_qualified_index_name,
-                "columns": self.column_names,
+                "columns": self._vector_index_column_names,
                 "num_results": top_k,
                 "query_type": self.query_type,
                 "filters_json": filters_json,
@@ -540,11 +543,18 @@ class Databricks(VectorStoreBase):
             memory_results = []
             for row in data_array:
                 # Map columns to values
-                row_dict = dict(zip(self.column_names, row)) if isinstance(row, (list, tuple)) else row
-                score = row_dict.get("score") or (
-                    row[-1] if isinstance(row, (list, tuple)) and len(row) > len(self.column_names) else None
+                row_dict = (
+                    dict(zip(self._vector_index_column_names, row))
+                    if isinstance(row, (list, tuple))
+                    else row
                 )
-                payload = {k: row_dict.get(k) for k in self.column_names}
+                score = row_dict.get("score") or (
+                    row[-1]
+                    if isinstance(row, (list, tuple))
+                    and len(row) > len(self._vector_index_column_names)
+                    else None
+                )
+                payload = {k: row_dict.get(k) for k in self._vector_index_column_names}
                 payload["data"] = payload.get("memory", "")
                 memory_id = row_dict.get("memory_id") or row_dict.get("id")
                 memory_results.append(MemoryResult(id=memory_id, score=score, payload=payload))
@@ -577,7 +587,7 @@ class Databricks(VectorStoreBase):
 
             sdk_results = self.client.vector_search_indexes.query_index(
                 index_name=self.fully_qualified_index_name,
-                columns=self.column_names,
+                columns=self._vector_index_column_names,
                 query_text=query,
                 num_results=top_k,
                 query_type="FULL_TEXT",
@@ -589,11 +599,18 @@ class Databricks(VectorStoreBase):
 
             memory_results = []
             for row in data_array:
-                row_dict = dict(zip(self.column_names, row)) if isinstance(row, (list, tuple)) else row
-                score = row_dict.get("score") or (
-                    row[-1] if isinstance(row, (list, tuple)) and len(row) > len(self.column_names) else None
+                row_dict = (
+                    dict(zip(self._vector_index_column_names, row))
+                    if isinstance(row, (list, tuple))
+                    else row
                 )
-                payload = {k: row_dict.get(k) for k in self.column_names}
+                score = row_dict.get("score") or (
+                    row[-1]
+                    if isinstance(row, (list, tuple))
+                    and len(row) > len(self._vector_index_column_names)
+                    else None
+                )
+                payload = {k: row_dict.get(k) for k in self._vector_index_column_names}
                 payload["data"] = payload.get("memory", "")
                 memory_id = row_dict.get("memory_id") or row_dict.get("id")
                 memory_results.append(MemoryResult(id=memory_id, score=score, payload=payload))
@@ -710,7 +727,7 @@ class Databricks(VectorStoreBase):
             # Use query_text for Delta Sync with model endpoint, query_vector otherwise
             query_kwargs = {
                 "index_name": self.fully_qualified_index_name,
-                "columns": self.column_names,
+                "columns": self._vector_index_column_names,
                 "num_results": 1,
                 "query_type": self.query_type,
                 "filters_json": filters_json,
@@ -867,12 +884,12 @@ class Databricks(VectorStoreBase):
         Returns:
             List containing list of MemoryResult objects.
         """
+        if filters and _MUTATION_MARKER_KEY in filters:
+            return self._list_exact_mutation_marker(filters, top_k)
         try:
-            if filters and _MUTATION_MARKER_KEY in filters:
-                return self._list_exact_mutation_marker(filters, top_k)
             filters_json = json.dumps(filters) if filters else None
             num_results = top_k or 100
-            columns = self.column_names
+            columns = self._vector_index_column_names
             # Use query_text for Delta Sync with model endpoint, query_vector otherwise
             query_kwargs = {
                 "index_name": self.fully_qualified_index_name,

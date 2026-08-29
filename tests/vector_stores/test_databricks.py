@@ -206,6 +206,32 @@ def test_insert_and_exact_list_use_mutation_marker_column(db_instance_delta, moc
     assert results[0][0].payload["_mem0_sidecar_mutation_id"] == marker
 
 
+def test_mutation_marker_stays_out_of_vector_index_columns(db_instance_delta, mock_workspace_client):
+    create_call = mock_workspace_client.vector_search_indexes.create_index.call_args.kwargs
+    assert "_mem0_sidecar_mutation_id" not in create_call["delta_sync_index_spec"].columns_to_sync
+
+    db_instance_delta.list(filters={"user_id": "alice"}, top_k=5)
+
+    query_call = mock_workspace_client.vector_search_indexes.query_index.call_args.kwargs
+    assert "_mem0_sidecar_mutation_id" not in query_call["columns"]
+
+
+def test_exact_mutation_marker_lookup_propagates_warehouse_failure(
+    db_instance_delta,
+    mock_workspace_client,
+):
+    mock_workspace_client.statement_execution.execute_statement.return_value = _make_exec_response(
+        "FAILED",
+        "warehouse timeout",
+    )
+
+    with pytest.raises(RuntimeError, match="Exact marker lookup failed"):
+        db_instance_delta.list(
+            filters={"_mem0_sidecar_mutation_id": "a" * 64},
+            top_k=1000,
+        )
+
+
 # ---------------------- Search Tests ---------------------- #
 
 
