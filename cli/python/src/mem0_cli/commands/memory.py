@@ -56,7 +56,14 @@ def _validate_expires(value: str) -> None:
             err_console, "Invalid date format for --expires. Use YYYY-MM-DD (e.g. 2025-12-31)."
         )
         raise typer.Exit(1)
-    if date.fromisoformat(value) <= date.today():
+    try:
+        parsed = date.fromisoformat(value)
+    except ValueError:
+        print_error(
+            err_console, "Invalid date format for --expires. Use YYYY-MM-DD (e.g. 2025-12-31)."
+        )
+        raise typer.Exit(1) from None
+    if parsed <= date.today():
         print_error(err_console, "--expires date must be in the future.")
         raise typer.Exit(1)
 

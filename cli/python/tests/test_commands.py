@@ -225,6 +225,33 @@ class TestAddCommand:
                 output="text",
             )
 
+    def test_add_nonexistent_expiration_date_exits_cleanly(self, mock_backend):
+        console, _buf = _make_console()
+        err_console, err_buf = _make_err_console()
+        with (
+            patch("mem0_cli.commands.memory.console", console),
+            patch("mem0_cli.commands.memory.err_console", err_console),
+            pytest.raises((SystemExit, TyperExit)),
+        ):
+            cmd_add(
+                mock_backend,
+                "test",
+                user_id="alice",
+                agent_id=None,
+                app_id=None,
+                run_id=None,
+                messages=None,
+                file=None,
+                metadata=None,
+                immutable=False,
+                no_infer=False,
+                expires="2026-02-30",
+                categories=None,
+                output="text",
+            )
+        assert "Invalid date format" in err_buf.getvalue()
+        mock_backend.add.assert_not_called()
+
     def test_add_from_file(self, mock_backend, tmp_path):
         file_path = tmp_path / "messages.json"
         file_path.write_text(json.dumps([{"role": "user", "content": "hello"}]))

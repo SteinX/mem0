@@ -13,7 +13,7 @@ export const includeApiKey = (
 	// Resolve relative URLs against the configured base URL.
 	if (request.url && request.url.startsWith('/')) {
 		const base = (bundle.authData && bundle.authData.baseUrl) || 'https://api.mem0.ai';
-		request.url = `${base.replace(/\/$/, '')}${request.url}`;
+		request.url = `${base.replace(/\/+$/, '')}${request.url}`;
 	}
 	return request;
 };

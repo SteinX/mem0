@@ -7,6 +7,7 @@ import deleteMemory from '../src/creates/delete_memory';
 import searchMemories from '../src/searches/search_memories';
 import getMemories from '../src/searches/get_memories';
 import { includeApiKey } from '../src/middleware';
+import type { Bundle, ZObject } from '../src/types';
 
 // Minimal `z` stub: hands back queued responses and records every request.
 const makeZ = (responses: any[] = []): any => {
@@ -129,6 +130,16 @@ describe('search / get array-shape enforcement (offline)', () => {
 		expect(res).toHaveLength(1);
 	});
 
+	it('search ORs user and agent attribution scopes', async () => {
+		const z = makeZ([{ data: { results: [] } }]);
+		await searchMemories.operation.perform(z, {
+			inputData: { query: 'x', user_id: 'u1', agent_id: 'a1' },
+		} as unknown as Bundle);
+		expect(z.requests[0].body.filters).toEqual({
+			OR: [{ user_id: 'u1' }, { agent_id: 'a1' }],
+		});
+	});
+
 	it('get_memories returns [] when the API returns neither array nor results', async () => {
 		const z = makeZ([{ data: {} }]);
 		const res = await getMemories.operation.perform(z, { inputData: { user_id: 'u1' } } as any);
@@ -172,6 +183,13 @@ describe('includeApiKey middleware (offline)', () => {
 		} as any);
 		expect(req.url).toBe('https://api.mem0.ai/v3/memories/');
 		expect(req.headers!.Authorization).toBe('Token k');
+	});
+
+	it('strips every trailing slash from the configured base URL', () => {
+		const req = includeApiKey({ url: '/v3/memories/' }, null as unknown as ZObject, {
+			authData: { apiKey: 'k', baseUrl: 'https://mem0.example.test///' },
+		} as unknown as Bundle);
+		expect(req.url).toBe('https://mem0.example.test/v3/memories/');
 	});
 
 	it('leaves absolute URLs untouched', () => {

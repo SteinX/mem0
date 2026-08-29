@@ -309,6 +309,24 @@ def test_gpt5_mini_not_classified_as_reasoning(mock_openai_client):
     assert call_kwargs[1].get("temperature") == 0.1
 
 
+def test_gpt5_mini_omits_sampling_params(mock_openai_client):
+    config = OpenAIConfig(model="gpt-5-mini", temperature=0.2, max_tokens=100, top_p=0.1)
+    llm = OpenAILLM(config)
+    messages = [{"role": "user", "content": "Hello"}]
+
+    mock_response = Mock()
+    mock_response.choices = [Mock(message=Mock(content="Response"))]
+    mock_openai_client.chat.completions.create.return_value = mock_response
+
+    llm.generate_response(messages)
+
+    call_kwargs = mock_openai_client.chat.completions.create.call_args[1]
+    assert "temperature" not in call_kwargs
+    assert "top_p" not in call_kwargs
+    assert "max_tokens" not in call_kwargs
+    assert "max_completion_tokens" not in call_kwargs
+
+
 def test_is_reasoning_model_classification(mock_openai_client):
     """Test _is_reasoning_model correctly classifies known models."""
     config = OpenAIConfig(model="gpt-4.1")
@@ -319,6 +337,7 @@ def test_is_reasoning_model_classification(mock_openai_client):
     assert llm._is_reasoning_model("o3-mini") is True
     assert llm._is_reasoning_model("o3") is True
     assert llm._is_reasoning_model("gpt-5") is True
+    assert llm._is_reasoning_model("gpt-5-mini") is True
     assert llm._is_reasoning_model("o1-preview") is True
     assert llm._is_reasoning_model("o1-2024-12-17") is True
     assert llm._is_reasoning_model("openai/o3-mini") is True

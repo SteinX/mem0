@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { truncateOutput, MAX_OUTPUT_LINES } from "../src/output.ts";
+import { truncateOutput, MAX_OUTPUT_BYTES, MAX_OUTPUT_LINES } from "../src/output.ts";
 
 describe("truncateOutput", () => {
   it("passes small output through untouched", () => {
@@ -18,6 +18,13 @@ describe("truncateOutput", () => {
     const huge = "x".repeat(60_000);
     const out = truncateOutput(huge);
     expect(out.length).toBeLessThan(huge.length);
+    expect(out).toContain("[Output truncated:");
+  });
+
+  it("enforces the byte cap for multibyte UTF-8 output", () => {
+    const huge = "界".repeat(MAX_OUTPUT_BYTES);
+    const out = truncateOutput(huge);
+    expect(Buffer.byteLength(out, "utf8")).toBeLessThanOrEqual(MAX_OUTPUT_BYTES);
     expect(out).toContain("[Output truncated:");
   });
 
