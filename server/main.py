@@ -27,7 +27,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from mem0.exceptions import ValidationError as Mem0ValidationError
-from mem0.memory.main import _validate_and_trim_entity_id
+from mem0.memory.main import _validate_and_trim_entity_id, _vector_store_list_rows
 from models import RequestLog, User
 from pydantic import BaseModel, Field
 from rate_limit import limiter
@@ -451,7 +451,7 @@ def _list_all_memories(
         results = get_memory_instance().vector_store.list(top_k=limit)
     else:
         results = get_memory_instance().vector_store.list(filters=filters, top_k=limit)
-    rows = results[0] if results and isinstance(results, list) and isinstance(results[0], list) else results or []
+    rows = _vector_store_list_rows(results)
     memories = [_serialize_memory(row) for row in rows]
     if filters:
         memories = [

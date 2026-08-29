@@ -362,13 +362,30 @@ class Weaviate(VectorStoreBase):
         filter_conditions = []
         if filters:
             for key, value in filters.items():
-                if value and key in ["user_id", "agent_id", "run_id"]:
+                if value and key in [
+                    "user_id",
+                    "agent_id",
+                    "run_id",
+                    "_mem0_sidecar_mutation_id",
+                ]:
                     filter_conditions.append(Filter.by_property(key).equal(value))
         combined_filter = Filter.all_of(filter_conditions) if filter_conditions else None
         response = collection.query.fetch_objects(
             limit=top_k,
             filters=combined_filter,
-            return_properties=["hash", "created_at", "updated_at", "user_id", "agent_id", "run_id", "data", "category"],
+            return_properties=[
+                "hash",
+                "created_at",
+                "updated_at",
+                "user_id",
+                "agent_id",
+                "run_id",
+                "data",
+                "category",
+                "_mem0_sidecar_mutation_id",
+                "_mem0_sidecar_project_id",
+                "_mem0_sidecar_app_id",
+            ],
         )
         results = []
         for obj in response.objects:
