@@ -1,8 +1,10 @@
 import os
 import sys
 import uuid
+from contextlib import nullcontext
 from datetime import datetime, timezone
 from functools import partial
+from unittest.mock import patch
 
 import anyio
 import pytest
@@ -63,15 +65,15 @@ def _verify(
     api_key: str | None = None,
 ):
     credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=bearer) if bearer is not None else None
-    return anyio.run(
-        partial(
-            auth.verify_auth,
-            request,
-            credentials=credentials,
-            x_api_key=api_key,
-            db=session,
-        ),
-    )
+    with patch.object(auth, "SessionLocal", return_value=nullcontext(session)):
+        return anyio.run(
+            partial(
+                auth.verify_auth,
+                request,
+                credentials=credentials,
+                x_api_key=api_key,
+            ),
+        )
 
 
 def test_api_key_reports_the_exact_hash_matched_descriptor(session, monkeypatch):
@@ -288,6 +290,7 @@ def test_auth_me_never_discloses_presented_key_or_hash_in_http_or_request_log(
 
     app.include_router(auth_router.router)
     app.dependency_overrides[get_db] = lambda: session
+    monkeypatch.setattr(auth, "SessionLocal", lambda: nullcontext(session))
 
     response = TestClient(app).get(
         "/auth/me",
