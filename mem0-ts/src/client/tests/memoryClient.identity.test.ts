@@ -192,6 +192,20 @@ describe("MemoryClient - identity cache overflow", () => {
     expect(pingCount(mock)).toBe(2);
   });
 
+  test("zero bypasses an identity cached by an earlier client", async () => {
+    const mock = projectOk();
+    const Client = isolatedClient();
+
+    await new Client({ apiKey: "warm-key", identityCacheMax: 2 }).getProject({
+      fields: [],
+    });
+    await new Client({ apiKey: "warm-key", identityCacheMax: 0 }).getProject({
+      fields: [],
+    });
+
+    expect(pingCount(mock)).toBe(2);
+  });
+
   test("a lower maximum evicts all excess cached identities", async () => {
     const mock = projectOk();
     const Client = isolatedClient();
@@ -209,6 +223,25 @@ describe("MemoryClient - identity cache overflow", () => {
     });
 
     expect(pingCount(mock)).toBe(5);
+  });
+
+  test("a lower maximum is enforced before returning a cache hit", async () => {
+    const mock = projectOk();
+    const Client = isolatedClient();
+
+    for (const apiKey of ["warm-a", "warm-b", "warm-c"]) {
+      await new Client({ apiKey, identityCacheMax: 3 }).getProject({
+        fields: [],
+      });
+    }
+    await new Client({ apiKey: "warm-c", identityCacheMax: 1 }).getProject({
+      fields: [],
+    });
+    await new Client({ apiKey: "warm-b", identityCacheMax: 1 }).getProject({
+      fields: [],
+    });
+
+    expect(pingCount(mock)).toBe(4);
   });
 
   test("rejects invalid cache maxima", () => {

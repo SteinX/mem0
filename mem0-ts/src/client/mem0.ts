@@ -151,24 +151,29 @@ export default class MemoryClient {
   // One ping per credential pair per process, shared via identityByCredentials.
   private _resolveIdentity(): Promise<void> {
     const credentials = `${this.host}\u0000${this.apiKey}`;
-    let shared = identityByCredentials.get(credentials);
-    if (!shared) {
+    let shared: Promise<ClientIdentity> | undefined;
+    if (this.identityCacheMax === 0) {
       shared = this._initializeClient();
-      while (
-        this.identityCacheMax > 0 &&
-        identityByCredentials.size >= this.identityCacheMax
-      ) {
+    } else {
+      while (identityByCredentials.size > this.identityCacheMax) {
         identityByCredentials.delete(
           identityByCredentials.keys().next().value!,
         );
       }
-      if (this.identityCacheMax > 0) {
+      shared = identityByCredentials.get(credentials);
+      if (!shared) {
+        shared = this._initializeClient();
+        while (identityByCredentials.size >= this.identityCacheMax) {
+          identityByCredentials.delete(
+            identityByCredentials.keys().next().value!,
+          );
+        }
         identityByCredentials.set(credentials, shared);
+        // A failed ping must not be cached, or the process never recovers.
+        shared.then((identity) => {
+          if (!identity.telemetryId) identityByCredentials.delete(credentials);
+        });
       }
-      // A failed ping must not be cached, or the process never recovers.
-      shared.then((identity) => {
-        if (!identity.telemetryId) identityByCredentials.delete(credentials);
-      });
     }
     return shared.then((identity) => {
       this.telemetryId = identity.telemetryId;
