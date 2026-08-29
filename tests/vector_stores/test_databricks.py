@@ -175,7 +175,13 @@ def test_insert_and_exact_list_use_mutation_marker_column(db_instance_delta, moc
     marker = "a" * 64
     db_instance_delta.insert(
         vectors=[[0.1, 0.2]],
-        payloads=[{"data": "memory", "user_id": "alice", "_mem0_sidecar_mutation_id": marker}],
+        payloads=[{
+            "data": "memory",
+            "user_id": "alice",
+            "_mem0_sidecar_mutation_id": marker,
+            "_mem0_sidecar_project_id": "project-1",
+            "_mem0_sidecar_app_id": "app-1",
+        }],
         ids=["memory-1"],
     )
     insert_params = {
@@ -183,12 +189,16 @@ def test_insert_and_exact_list_use_mutation_marker_column(db_instance_delta, moc
         for parameter in mock_workspace_client.statement_execution.execute_statement.call_args.kwargs["parameters"]
     }
     assert insert_params["_mem0_sidecar_mutation_id_0"] == marker
+    assert insert_params["_mem0_sidecar_project_id_0"] == "project-1"
+    assert insert_params["_mem0_sidecar_app_id_0"] == "app-1"
 
     row_values = {
         "memory_id": "memory-1",
         "memory": "memory",
         "user_id": "alice",
         "_mem0_sidecar_mutation_id": marker,
+        "_mem0_sidecar_project_id": "project-1",
+        "_mem0_sidecar_app_id": "app-1",
     }
     mock_workspace_client.statement_execution.execute_statement.return_value = SimpleNamespace(
         status=_make_status(),
@@ -204,16 +214,48 @@ def test_insert_and_exact_list_use_mutation_marker_column(db_instance_delta, moc
     assert "_mem0_sidecar_mutation_id = :filter__mem0_sidecar_mutation_id" in call["statement"]
     assert "LIMIT 1000" in call["statement"]
     assert results[0][0].payload["_mem0_sidecar_mutation_id"] == marker
+    assert results[0][0].payload["_mem0_sidecar_project_id"] == "project-1"
+    assert results[0][0].payload["_mem0_sidecar_app_id"] == "app-1"
 
 
 def test_mutation_marker_stays_out_of_vector_index_columns(db_instance_delta, mock_workspace_client):
     create_call = mock_workspace_client.vector_search_indexes.create_index.call_args.kwargs
-    assert "_mem0_sidecar_mutation_id" not in create_call["delta_sync_index_spec"].columns_to_sync
+    source_only = {
+        "_mem0_sidecar_mutation_id",
+        "_mem0_sidecar_project_id",
+        "_mem0_sidecar_app_id",
+    }
+    assert source_only.isdisjoint(create_call["delta_sync_index_spec"].columns_to_sync)
 
     db_instance_delta.list(filters={"user_id": "alice"}, top_k=5)
 
     query_call = mock_workspace_client.vector_search_indexes.query_index.call_args.kwargs
-    assert "_mem0_sidecar_mutation_id" not in query_call["columns"]
+    assert source_only.isdisjoint(query_call["columns"])
+
+
+def test_existing_table_adds_missing_sidecar_metadata_columns(mock_workspace_client):
+    mock_workspace_client.tables.exists.return_value = SimpleNamespace(table_exists=True)
+    mock_workspace_client.tables.get.return_value = SimpleNamespace(
+        columns=[SimpleNamespace(name="_mem0_sidecar_mutation_id")]
+    )
+
+    Databricks(
+        workspace_url="https://test",
+        access_token="tok",
+        endpoint_name="vs-endpoint",
+        catalog="catalog",
+        schema="schema",
+        table_name="table",
+        collection_name="mem0",
+        warehouse_name="test-warehouse",
+        index_type=VectorIndexType.DELTA_SYNC,
+        embedding_model_endpoint_name="embedding-endpoint",
+    )
+
+    statement = mock_workspace_client.statement_execution.execute_statement.call_args.kwargs["statement"]
+    assert "_mem0_sidecar_project_id STRING" in statement
+    assert "_mem0_sidecar_app_id STRING" in statement
+    assert "_mem0_sidecar_mutation_id STRING" not in statement
 
 
 def test_exact_mutation_marker_lookup_propagates_warehouse_failure(

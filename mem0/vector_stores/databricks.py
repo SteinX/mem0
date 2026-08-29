@@ -30,6 +30,13 @@ from mem0.vector_stores.base import VectorStoreBase
 logger = logging.getLogger(__name__)
 
 _MUTATION_MARKER_KEY = "_mem0_sidecar_mutation_id"
+_PROJECT_SCOPE_KEY = "_mem0_sidecar_project_id"
+_APP_SCOPE_KEY = "_mem0_sidecar_app_id"
+_SOURCE_ONLY_COLUMNS = {
+    _MUTATION_MARKER_KEY,
+    _PROJECT_SCOPE_KEY,
+    _APP_SCOPE_KEY,
+}
 
 
 class MemoryResult(BaseModel):
@@ -201,19 +208,24 @@ class Databricks(VectorStoreBase):
                     position=9,
                 )
             )
-        self.columns.append(
-            ColumnInfo(
-                name=_MUTATION_MARKER_KEY,
-                type_name=ColumnTypeName.STRING,
-                type_text="string",
-                type_json='{"type":"string"}',
-                comment="Sidecar mutation marker",
-                position=len(self.columns),
+        for name, comment in (
+            (_MUTATION_MARKER_KEY, "Sidecar mutation marker"),
+            (_PROJECT_SCOPE_KEY, "Sidecar project scope"),
+            (_APP_SCOPE_KEY, "Sidecar application scope"),
+        ):
+            self.columns.append(
+                ColumnInfo(
+                    name=name,
+                    type_name=ColumnTypeName.STRING,
+                    type_text="string",
+                    type_json='{"type":"string"}',
+                    comment=comment,
+                    position=len(self.columns),
+                )
             )
-        )
         self.column_names = [col.name for col in self.columns]
         self._vector_index_column_names = [
-            name for name in self.column_names if name != _MUTATION_MARKER_KEY
+            name for name in self.column_names if name not in _SOURCE_ONLY_COLUMNS
         ]
 
         # Initialize Databricks workspace client
@@ -249,7 +261,7 @@ class Databricks(VectorStoreBase):
 
         # Get the warehouse ID by name
         self.warehouse_id = next((w.id for w in self.client.warehouses.list() if w.name == warehouse_name), None)
-        self._ensure_mutation_marker_column()
+        self._ensure_sidecar_metadata_columns()
 
         # Initialize endpoint (required in Databricks)
         self._ensure_endpoint_exists()
@@ -259,23 +271,26 @@ class Databricks(VectorStoreBase):
         if self.fully_qualified_index_name not in collections:
             self.create_col()
 
-    def _ensure_mutation_marker_column(self):
+    def _ensure_sidecar_metadata_columns(self):
         if not self.client.tables.exists(self.fully_qualified_table_name).table_exists:
             return
         table = self.client.tables.get(self.fully_qualified_table_name)
-        if any(column.name == _MUTATION_MARKER_KEY for column in (table.columns or [])):
+        existing_columns = {column.name for column in (table.columns or [])}
+        missing_columns = _SOURCE_ONLY_COLUMNS - existing_columns
+        if not missing_columns:
             return
+        additions = ", ".join(f"{name} STRING" for name in sorted(missing_columns))
         response = self.client.statement_execution.execute_statement(
             statement=(
                 f"ALTER TABLE {self.fully_qualified_table_name} "
-                f"ADD COLUMNS ({_MUTATION_MARKER_KEY} STRING)"
+                f"ADD COLUMNS ({additions})"
             ),
             warehouse_id=self.warehouse_id,
             wait_timeout="30s",
         )
         if response.status.state.value != "SUCCEEDED":
             raise RuntimeError(
-                f"Failed to add {_MUTATION_MARKER_KEY} to {self.fully_qualified_table_name}: "
+                f"Failed to add sidecar metadata columns to {self.fully_qualified_table_name}: "
                 f"{response.status.error}"
             )
 

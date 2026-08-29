@@ -730,6 +730,48 @@ def test_mutation_marker_is_filterable_persisted_and_backfilled(azure_ai_search_
     )
 
 
+def test_exact_marker_list_repairs_late_legacy_payload_write(azure_ai_search_instance):
+    instance, search_client, _ = azure_ai_search_instance
+    marker = "a" * 64
+    search_client.search.side_effect = [
+        [],
+        [
+            {
+                "id": "memory-1",
+                "payload": json.dumps({
+                    "user_id": "alice",
+                    "_mem0_sidecar_mutation_id": marker,
+                }),
+                "@search.score": 1.0,
+            },
+            {
+                "id": "wrong-marker",
+                "payload": json.dumps({
+                    "user_id": "alice",
+                    "_mem0_sidecar_mutation_id": "b" * 64,
+                }),
+                "@search.score": 0.5,
+            },
+        ],
+    ]
+    search_client.merge_or_upload_documents.reset_mock()
+
+    [results] = instance.list(
+        filters={"user_id": "alice", "_mem0_sidecar_mutation_id": marker},
+        top_k=1000,
+    )
+
+    assert [result.id for result in results] == ["memory-1"]
+    fallback = search_client.search.call_args_list[1].kwargs
+    assert fallback["search_text"] == marker
+    assert fallback["search_fields"] == ["payload"]
+    assert fallback["filter"] == "user_id eq 'alice'"
+    assert fallback["top"] == 1000
+    search_client.merge_or_upload_documents.assert_called_once_with(
+        documents=[{"id": "memory-1", "mem0_sidecar_mutation_id": marker}]
+    )
+
+
 def test_build_filter_rejects_dict_value(azure_ai_search_instance):
     instance, _, _ = azure_ai_search_instance
     with pytest.raises(ValueError):

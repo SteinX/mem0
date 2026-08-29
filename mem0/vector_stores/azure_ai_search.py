@@ -417,6 +417,30 @@ class AzureAISearch(VectorStoreBase):
         for result in search_results:
             payload = json.loads(extract_json(result["payload"]))
             results.append(OutputData(id=result["id"], score=result["@search.score"], payload=payload))
+        if results or not filters or _MUTATION_MARKER_KEY not in filters:
+            return [results]
+
+        marker = filters[_MUTATION_MARKER_KEY]
+        entity_filters = {key: value for key, value in filters.items() if key != _MUTATION_MARKER_KEY}
+        legacy_results = self.search_client.search(
+            search_text=marker,
+            search_fields=["payload"],
+            filter=self._build_filter_expression(entity_filters) if entity_filters else None,
+            select=["id", "payload"],
+            top=top_k,
+        )
+        repairs = []
+        for result in legacy_results:
+            try:
+                payload = json.loads(extract_json(result["payload"]))
+            except (AttributeError, json.JSONDecodeError, TypeError):
+                continue
+            if not isinstance(payload, dict) or any(payload.get(key) != value for key, value in filters.items()):
+                continue
+            results.append(OutputData(id=result["id"], score=result.get("@search.score"), payload=payload))
+            repairs.append({"id": result["id"], _MUTATION_MARKER_FIELD: marker})
+        if repairs:
+            self.search_client.merge_or_upload_documents(documents=repairs)
         return [results]
 
     def __del__(self):
