@@ -650,7 +650,7 @@ class TestGetMemories:
             params={
                 "user_id": "test_routing_user",
                 "_mem0_sidecar_mutation_id": marker,
-                "top_k": 5000,
+                "top_k": 1000,
                 "show_expired": True,
             },
         )
@@ -661,9 +661,35 @@ class TestGetMemories:
                 "user_id": "test_routing_user",
                 "_mem0_sidecar_mutation_id": marker,
             },
-            top_k=5000,
+            top_k=1000,
         )
         mock_memory.get_all.assert_not_called()
+
+    def test_get_memories_exact_mutation_marker_normalizes_entity_filters(
+        self,
+        client,
+        mock_memory,
+    ):
+        marker = "b" * 64
+        mock_memory.vector_store.list.return_value = []
+
+        response = client.get(
+            "/memories",
+            params={
+                "user_id": "  test_routing_user  ",
+                "_mem0_sidecar_mutation_id": marker,
+                "top_k": 1000,
+            },
+        )
+
+        assert response.status_code == 200
+        mock_memory.vector_store.list.assert_called_once_with(
+            filters={
+                "user_id": "test_routing_user",
+                "_mem0_sidecar_mutation_id": marker,
+            },
+            top_k=1000,
+        )
 
     @pytest.mark.parametrize(
         "marker",

@@ -27,6 +27,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from mem0.exceptions import ValidationError as Mem0ValidationError
+from mem0.memory.main import _validate_and_trim_entity_id
 from models import RequestLog, User
 from pydantic import BaseModel, Field
 from rate_limit import limiter
@@ -474,7 +475,7 @@ def get_all_memories(
     """Retrieve stored memories. Lists all memories when no identifier is provided (admin only)."""
     try:
         filters = {
-            key: value
+            key: _validate_and_trim_entity_id(value, key)
             for key, value in {
                 "user_id": user_id,
                 "run_id": run_id,
@@ -506,6 +507,8 @@ def get_all_memories(
         return get_memory_instance().get_all(**params)
     except HTTPException:
         raise
+    except (ValueError, Mem0ValidationError) as e:
+        raise _client_error(e)
     except Exception:
         raise upstream_error()
 
