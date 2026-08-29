@@ -184,8 +184,7 @@ def test_platform_search_uses_filters():
 
 
 def test_platform_search_ors_speakers_inside_app_and_run_boundaries():
-    fake = MemoryClient()
-    client = Mem0ServiceClient(client=fake)
+    client, fake = platform_client()
 
     client.search_memories(
         "q",
