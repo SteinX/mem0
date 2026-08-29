@@ -328,6 +328,29 @@ describe("MemoryClient - unresolved identity", () => {
     );
   });
 
+  test("does not retry a successful partial identity", async () => {
+    const responses = new Map<string, { status: number; body: unknown }>();
+    responses.set("/v1/ping/", {
+      status: 200,
+      body: {
+        status: "ok",
+        org_id: TEST_ORG_ID,
+        user_email: "test@example.com",
+      },
+    });
+    const mock = setupMockFetch(responses);
+
+    await expect(freshClient().getProject({ fields: [] })).rejects.toThrow(
+      "organizationId and projectId must be set",
+    );
+
+    expect(
+      mock.mock.calls.filter((call: [string, RequestInit]) =>
+        call[0].includes("/v1/ping/"),
+      ),
+    ).toHaveLength(1);
+  });
+
   test("getProject reports the unset ids", async () => {
     pingFails();
     await expect(freshClient().getProject({ fields: [] })).rejects.toThrow(

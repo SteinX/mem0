@@ -188,7 +188,9 @@ export default class MemoryClient {
     const attempted = this.initialized;
     await attempted;
     if (
-      (this.organizationId == null || this.projectId == null) &&
+      !this.telemetryId &&
+      this.organizationId == null &&
+      this.projectId == null &&
       this.initialized === attempted
     ) {
       this.initialized = this._resolveIdentity();
