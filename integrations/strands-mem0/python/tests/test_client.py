@@ -105,6 +105,32 @@ def test_injected_client_sets_platform_flag():
     assert Mem0ServiceClient(client=FakeMemory()).is_platform is False
 
 
+def test_injected_platform_subclass_preserves_platform_routing():
+    class MemoryClient(FakeMemoryClient):
+        pass
+
+    class InstrumentedMemoryClient(MemoryClient):
+        pass
+
+    fake = InstrumentedMemoryClient()
+    client = Mem0ServiceClient(client=fake)
+
+    assert client.is_platform is True
+    client.store_memory("a fact", {"user_id": "alex", "app_id": "repo"})
+    assert fake.add_calls[0][1]["source"] == "STRANDS"
+    client.search_memories(
+        "q",
+        {"user_id": "alex", "agent_id": "assistant", "app_id": "repo"},
+        5,
+    )
+    assert fake.search_calls[0][1]["filters"] == {
+        "AND": [
+            {"OR": [{"user_id": "alex"}, {"agent_id": "assistant"}]},
+            {"app_id": "repo"},
+        ]
+    }
+
+
 def test_async_client_is_rejected():
     """An async Mem0 client cannot be driven from a worker thread; reject it loudly."""
     with pytest.raises(ValueError, match="Async Mem0 clients are not supported"):

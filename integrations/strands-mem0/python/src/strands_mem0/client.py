@@ -35,7 +35,7 @@ _SOURCE = "STRANDS"
 
 def _is_platform_client(client: Any) -> bool:
     """Whether ``client`` is a hosted Mem0 platform client (vs an OSS ``Memory``)."""
-    return type(client).__name__ in _PLATFORM_CLIENTS
+    return any(base.__name__ in _PLATFORM_CLIENTS for base in type(client).__mro__)
 
 
 def _is_async_client(client: Any) -> bool:
