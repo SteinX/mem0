@@ -1,5 +1,6 @@
 import { VectorStore } from "./base";
 import { SearchFilters, VectorStoreConfig, VectorStoreResult } from "../types";
+import { loadPeerSync } from "../utils/load_peer";
 
 /**
  * Supported Milvus metric types. Mirrors the Python provider
@@ -77,24 +78,17 @@ export class Milvus implements VectorStore {
         this.FunctionType = undefined;
       }
     } else {
-      let MilvusClient: any;
-      let DataType: any;
-      let FunctionType: any;
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const sdk = require("@zilliz/milvus2-sdk-node");
-        MilvusClient = sdk.MilvusClient;
-        DataType = sdk.DataType;
-        FunctionType = sdk.FunctionType;
-      } catch (_) {
-        throw new Error(
-          "The '@zilliz/milvus2-sdk-node' package is required to use the Milvus vector store. " +
-            "Install it with: npm install @zilliz/milvus2-sdk-node",
-        );
-      }
-      this.DataType = DataType;
-      this.FunctionType = FunctionType;
-      this.client = new MilvusClient({
+      const sdk = loadPeerSync(
+        "@zilliz/milvus2-sdk-node",
+        "Milvus vector store",
+        () => {
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          return require("@zilliz/milvus2-sdk-node");
+        },
+      );
+      this.DataType = sdk.DataType;
+      this.FunctionType = sdk.FunctionType;
+      this.client = new sdk.MilvusClient({
         address: config.url || "http://localhost:19530",
         token: config.token,
         database: config.dbName || undefined,

@@ -147,6 +147,38 @@ afterAll(() => {
   (console.warn as jest.Mock).mockRestore?.();
 });
 
+describe("Milvus optional peer loading", () => {
+  afterEach(() => {
+    jest.dontMock("@zilliz/milvus2-sdk-node");
+    jest.resetModules();
+  });
+
+  it("preserves a missing transitive SDK dependency", () => {
+    const error = Object.assign(
+      new Error("Cannot find module '@grpc/missing-runtime'"),
+      { code: "MODULE_NOT_FOUND" },
+    );
+    jest.doMock("@zilliz/milvus2-sdk-node", () => {
+      throw error;
+    });
+
+    let caught: unknown;
+    jest.isolateModules(() => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const {
+        Milvus: MilvusWithBrokenPeer,
+      } = require("../vector_stores/milvus");
+      try {
+        new MilvusWithBrokenPeer({ collectionName: "mem0" });
+      } catch (loadError) {
+        caught = loadError;
+      }
+    });
+
+    expect(caught).toBe(error);
+  });
+});
+
 describe("Milvus vector store (TS OSS SDK)", () => {
   function makeStore(client: FakeMilvusClient, overrides: any = {}) {
     return new Milvus({
