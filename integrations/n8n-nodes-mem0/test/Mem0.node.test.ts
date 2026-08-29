@@ -17,13 +17,16 @@ function makeCtx(
 	operation: string,
 	params: Record<string, any>,
 	http: HttpImpl,
-	opts: { continueOnFail?: boolean } = {},
+	opts: { continueOnFail?: boolean; baseUrl?: string } = {},
 ): any {
 	const requests: any[] = [];
 	const node = { name: 'Mem0', type: '@mem0/n8n-nodes-mem0.mem0', typeVersion: 1 };
 	const ctx: any = {
 		getInputData: () => [{ json: {} }],
-		getCredentials: async () => ({ apiKey: 'm0-test', baseUrl: 'https://api.mem0.ai' }),
+		getCredentials: async () => ({
+			apiKey: 'm0-test',
+			baseUrl: opts.baseUrl ?? 'https://api.mem0.ai',
+		}),
 		getNodeParameter: (name: string, _i: number, dflt?: any) =>
 			name === 'operation' ? operation : name in params ? params[name] : dflt,
 		getNode: () => node,
@@ -130,6 +133,17 @@ describe('Mem0 node (offline)', () => {
 		const ctx = makeCtx('search', { query: 'x', userId: 'u1', limit: 5 }, async () => ({ results: [] }));
 		await run(ctx);
 		expect(ctx.requests[0].qs.source).toBe('N8N');
+	});
+
+	it('normalizes trailing slashes in a self-hosted base URL', async () => {
+		const ctx = makeCtx(
+			'search',
+			{ query: 'x', userId: 'u1', limit: 5 },
+			async () => ({ results: [] }),
+			{ baseUrl: 'https://mem0.example.test///' },
+		);
+		await run(ctx);
+		expect(ctx.requests[0].url).toBe('https://mem0.example.test/v3/memories/search/');
 	});
 
 	it('sends a single entity id as a flat filter', async () => {

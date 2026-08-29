@@ -97,6 +97,7 @@ jobs:
             n8n_nodes_mem0:
               - 'integrations/n8n-nodes-mem0/**'
               - '.github/workflows/n8n-nodes-mem0-checks.yml'
+              - '.github/workflows/ci-gate.yml'
             zapier_mem0:
               - 'integrations/zapier-mem0/**'
               - '.github/workflows/zapier-mem0-checks.yml'

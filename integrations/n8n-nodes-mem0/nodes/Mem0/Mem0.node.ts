@@ -371,7 +371,10 @@ export class Mem0 implements INodeType {
 		const items = this.getInputData();
 		const returnData: INodeExecutionData[] = [];
 		const credentials = await this.getCredentials('mem0Api');
-		const baseUrl = (credentials.baseUrl as string) || 'https://api.mem0.ai';
+		const baseUrl = ((credentials.baseUrl as string) || 'https://api.mem0.ai').replace(
+			/\/+$/,
+			'',
+		);
 
 		const request = async (
 			method: IHttpRequestMethods,
