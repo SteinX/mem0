@@ -11,6 +11,7 @@ const perform = async (z: ZObject, bundle: Bundle): Promise<Memory[]> => {
 		bundle.inputData.agent_id && { agent_id: bundle.inputData.agent_id },
 	].filter(Boolean);
 	const clauses: unknown[] = speakers.length > 1 ? [{ OR: speakers }] : speakers;
+	if (bundle.inputData.app_id) clauses.push({ app_id: bundle.inputData.app_id });
 	if (bundle.inputData.run_id) clauses.push({ run_id: bundle.inputData.run_id });
 	if (clauses.length > 0) body.filters = clauses.length === 1 ? clauses[0] : { AND: clauses };
 
@@ -37,6 +38,7 @@ export default {
 			{ key: 'query', label: 'Query', type: 'string', required: true },
 			{ key: 'user_id', label: 'User ID', type: 'string', required: true },
 			{ key: 'agent_id', label: 'Agent ID', type: 'string' },
+			{ key: 'app_id', label: 'App ID', type: 'string' },
 			{ key: 'run_id', label: 'Run ID', type: 'string' },
 			{ key: 'limit', label: 'Limit', type: 'integer', default: '50' },
 		],

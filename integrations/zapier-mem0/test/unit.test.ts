@@ -118,6 +118,14 @@ describe('add_memory (offline)', () => {
 		expect(z.requests[0].body.includes).toBe('work facts');
 		expect(z.requests[0].body.excludes).toBe('small talk');
 	});
+
+	it('forwards app_id as a tenant boundary on add', async () => {
+		const z = makeZ([{ data: { event_id: 'e1', status: 'PENDING' } }]);
+		await addMemory.operation.perform(z, {
+			inputData: { content: 'hi', user_id: 'u1', agent_id: 'a1', app_id: 'tenant-1' },
+		} as any);
+		expect(z.requests[0].body.app_id).toBe('tenant-1');
+	});
 });
 
 describe('search / get array-shape enforcement (offline)', () => {
@@ -140,23 +148,31 @@ describe('search / get array-shape enforcement (offline)', () => {
 		});
 	});
 
-	it('search keeps run boundary outside the speaker OR', async () => {
+	it('search keeps app and run boundaries outside the speaker OR', async () => {
 		const z = makeZ([{ data: { results: [] } }]);
 		await searchMemories.operation.perform(z, {
-			inputData: { query: 'x', user_id: 'u1', agent_id: 'a1', run_id: 'r1' },
+			inputData: { query: 'x', user_id: 'u1', agent_id: 'a1', app_id: 'tenant-1', run_id: 'r1' },
 		} as unknown as Bundle);
 		expect(z.requests[0].body.filters).toEqual({
-			AND: [{ OR: [{ user_id: 'u1' }, { agent_id: 'a1' }] }, { run_id: 'r1' }],
+			AND: [
+				{ OR: [{ user_id: 'u1' }, { agent_id: 'a1' }] },
+				{ app_id: 'tenant-1' },
+				{ run_id: 'r1' },
+			],
 		});
 	});
 
 	it('get_memories includes agent attribution and run scope', async () => {
 		const z = makeZ([{ data: { results: [] } }]);
 		await getMemories.operation.perform(z, {
-			inputData: { user_id: 'u1', agent_id: 'a1', run_id: 'r1' },
+			inputData: { user_id: 'u1', agent_id: 'a1', app_id: 'tenant-1', run_id: 'r1' },
 		} as unknown as Bundle);
 		expect(z.requests[0].body.filters).toEqual({
-			AND: [{ OR: [{ user_id: 'u1' }, { agent_id: 'a1' }] }, { run_id: 'r1' }],
+			AND: [
+				{ OR: [{ user_id: 'u1' }, { agent_id: 'a1' }] },
+				{ app_id: 'tenant-1' },
+				{ run_id: 'r1' },
+			],
 		});
 	});
 

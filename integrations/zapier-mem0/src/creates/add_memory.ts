@@ -42,6 +42,7 @@ const perform = async (z: ZObject, bundle: Bundle): Promise<AddResponse | EventR
 	};
 	if (bundle.inputData.user_id) body.user_id = bundle.inputData.user_id;
 	if (bundle.inputData.agent_id) body.agent_id = bundle.inputData.agent_id;
+	if (bundle.inputData.app_id) body.app_id = bundle.inputData.app_id;
 	if (bundle.inputData.run_id) body.run_id = bundle.inputData.run_id;
 	if (bundle.inputData.metadata) {
 		try {
@@ -116,6 +117,7 @@ export default {
 			},
 			{ key: 'user_id', label: 'User ID', type: 'string', required: true, helpText: 'Scope this memory to a user. Mem0 requires at least one entity ID.' },
 			{ key: 'agent_id', label: 'Agent ID', type: 'string' },
+			{ key: 'app_id', label: 'App ID', type: 'string' },
 			{ key: 'run_id', label: 'Run ID', type: 'string' },
 			{ key: 'metadata', label: 'Metadata (JSON)', type: 'string' },
 			{

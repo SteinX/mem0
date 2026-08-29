@@ -78,6 +78,7 @@ Set **Query** to the incoming message and **User ID** to the same value. The mat
 | **Role** | | `User` (default), `Assistant`, or `System` |
 | **User ID** | | Scopes the memory to a person |
 | **Agent ID** | | Scopes the memory to an agent |
+| **App ID** | | Scopes every extracted memory to an app or tenant |
 | **Run ID** | | Scopes the memory to a single session or run |
 | **Metadata (JSON)** | | Arbitrary JSON attached to each extracted memory |
 | **Custom Instructions** | | Free-text guidance steering what the extractor keeps or ignores, for this call |
@@ -103,6 +104,9 @@ Extraction runs asynchronously, so **Add Memory** returns an event ID and moves 
 | --- | --- | --- |
 | **Query** | Yes | Natural-language search text |
 | **User ID** | Yes | Whose memories to search. The API needs an entity filter |
+| **Agent ID** | | Also recall facts attributed to this agent speaker |
+| **App ID** | | Require results to belong to this app or tenant |
+| **Run ID** | | Require results to belong to this session or run |
 | **Limit** | | Maximum results, default `50` |
 
 ### Get Memories
@@ -110,10 +114,15 @@ Extraction runs asynchronously, so **Add Memory** returns an event ID and moves 
 | Field | Required | Purpose |
 | --- | --- | --- |
 | **User ID** | Yes | Whose memories to list |
+| **Agent ID** | | Also list facts attributed to this agent speaker |
+| **App ID** | | Require results to belong to this app or tenant |
+| **Run ID** | | Require results to belong to this session or run |
 | **Limit** | | Memories per page, default `50` |
 | **Page** | | Which page to return, 1-based, default `1` |
 
 Returns one page per run. Raise **Page** to walk through larger result sets.
+
+When both **User ID** and **Agent ID** are supplied, Mem0 recalls either speaker because default extraction stores each fact under the speaker that stated it. **App ID** and **Run ID** stay outside that speaker OR as mandatory boundaries. Use a tenant-specific App ID when different users share the same agent.
 
 ### Delete Memory
 

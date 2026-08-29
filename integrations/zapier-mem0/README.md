@@ -17,6 +17,8 @@ Built with the [Zapier Platform CLI](https://docs.zapier.com/platform/quickstart
 
 **Get Memories** returns one page at a time; use the **Page** and **Limit** fields to page through larger result sets.
 
+Entity scopes follow Mem0's hosted attribution contract: **User ID** and **Agent ID** are alternate speaker scopes, while **App ID** and **Run ID** are mandatory boundaries. When both speakers are present, reads use `OR(user_id, agent_id) AND app_id AND run_id`. Use a tenant-specific App ID when users share an agent.
+
 ## Authentication
 
 Custom (API key) auth. Provide a Mem0 API key from [app.mem0.ai](https://app.mem0.ai) → Settings → API Keys. It is sent as `Authorization: Token <key>`.
