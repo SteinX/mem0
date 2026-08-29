@@ -1,6 +1,7 @@
 import os
 import sys
 import uuid
+from contextlib import nullcontext
 from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
@@ -41,6 +42,7 @@ def test_admin_owned_client_api_key_cannot_enumerate_entities(
     session,
     monkeypatch,
 ):
+    monkeypatch.setattr(auth, "SessionLocal", lambda: nullcontext(session))
     monkeypatch.setattr(auth, "ADMIN_API_KEY", "")
     monkeypatch.setattr(auth, "AUTH_DISABLED", False)
     user = User(

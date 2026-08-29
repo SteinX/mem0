@@ -84,7 +84,8 @@ def _load_app(env_overrides: dict):
         with testing_session() as database:
             yield database
 
-    server_main.SessionLocal = testing_session
+    setattr(server_auth, "SessionLocal", testing_session)
+    setattr(server_main, "SessionLocal", testing_session)
     server_main.app.dependency_overrides[server_db.get_db] = override_get_db
     server_main.app.state.test_engine = engine
     return server_main.app
