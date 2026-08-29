@@ -40,7 +40,7 @@ Two independent controls:
 
 Both take **User ID**, **Agent ID**, **App ID**, and **Run ID**, and at least one is required — the API rejects a query with no entity scope, and the node fails with a clear message before calling it.
 
-Supplying several combines them with **AND**, so every returned memory must match every provided entity ID. This keeps **User ID** as a tenant boundary when an agent or run is shared across users. To query the union of separate scopes, run one operation per entity ID and combine the results explicitly.
+**User ID** and **Agent ID** are speaker scopes. When both are supplied, the node combines them with **OR** because default inferred writes store each fact under the speaker that stated it, not under both IDs. **App ID** and **Run ID** are mandatory boundaries and remain outside that speaker OR under **AND**. Use a tenant-specific App ID when different users share an agent and must remain isolated.
 
 ## Credentials
 

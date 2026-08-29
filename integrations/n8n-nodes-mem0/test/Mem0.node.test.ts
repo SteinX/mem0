@@ -152,7 +152,7 @@ describe('Mem0 node (offline)', () => {
 		expect(ctx.requests[0].body.filters).toEqual({ user_id: 'u1' });
 	});
 
-	it('ANDs every supplied entity id to preserve tenant boundaries', async () => {
+	it('ORs speaker ids while keeping app and run as mandatory boundaries', async () => {
 		const ctx = makeCtx(
 			'search',
 			{ query: 'x', userId: 'u1', agentId: 'a1', appId: 'p1', runId: 'r1' },
@@ -161,8 +161,7 @@ describe('Mem0 node (offline)', () => {
 		await run(ctx);
 		expect(ctx.requests[0].body.filters).toEqual({
 			AND: [
-				{ user_id: 'u1' },
-				{ agent_id: 'a1' },
+				{ OR: [{ user_id: 'u1' }, { agent_id: 'a1' }] },
 				{ app_id: 'p1' },
 				{ run_id: 'r1' },
 			],
