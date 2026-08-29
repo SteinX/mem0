@@ -25,7 +25,7 @@ from typing import Any
 # ``add`` / ``search`` are coroutine functions, so ``asyncio.to_thread`` would hand
 # back an un-awaited coroutine and every write would silently no-op; it is rejected
 # in ``__init__`` rather than listed here.
-_PLATFORM_CLIENTS = {"MemoryClient"}
+_PLATFORM_CLIENTS = {("mem0.client.main", "MemoryClient")}
 
 # Tags platform writes so Mem0's backend attributes the memory to this integration
 # in telemetry (recognized values live in the backend's KNOWN_EVENT_SOURCES
@@ -35,7 +35,7 @@ _SOURCE = "STRANDS"
 
 def _is_platform_client(client: Any) -> bool:
     """Whether ``client`` is a hosted Mem0 platform client (vs an OSS ``Memory``)."""
-    return any(base.__name__ in _PLATFORM_CLIENTS for base in type(client).__mro__)
+    return any((base.__module__, base.__name__) in _PLATFORM_CLIENTS for base in type(client).__mro__)
 
 
 def _is_async_client(client: Any) -> bool:

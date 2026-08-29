@@ -83,6 +83,7 @@ def platform_client():
     """A Mem0ServiceClient wrapping a fake platform client."""
     fake = FakeMemoryClient()
     fake.__class__.__name__ = "MemoryClient"
+    fake.__class__.__module__ = "mem0.client.main"
     return Mem0ServiceClient(client=fake), fake
 
 
@@ -95,19 +96,21 @@ def test_detects_platform_by_class_name():
     assert _is_platform_client(FakeMemory()) is False
     fake = FakeMemoryClient()
     fake.__class__.__name__ = "MemoryClient"
+    fake.__class__.__module__ = "mem0.client.main"
     assert _is_platform_client(fake) is True
 
 
 def test_injected_client_sets_platform_flag():
     fake = FakeMemoryClient()
     fake.__class__.__name__ = "MemoryClient"
+    fake.__class__.__module__ = "mem0.client.main"
     assert Mem0ServiceClient(client=fake).is_platform is True
     assert Mem0ServiceClient(client=FakeMemory()).is_platform is False
 
 
 def test_injected_platform_subclass_preserves_platform_routing():
     class MemoryClient(FakeMemoryClient):
-        pass
+        __module__ = "mem0.client.main"
 
     class InstrumentedMemoryClient(MemoryClient):
         pass
@@ -128,6 +131,24 @@ def test_injected_platform_subclass_preserves_platform_routing():
             {"OR": [{"user_id": "alex"}, {"agent_id": "assistant"}]},
             {"app_id": "repo"},
         ]
+    }
+
+
+def test_oss_subclass_named_memory_client_remains_oss():
+    class MemoryClient(FakeMemory):
+        pass
+
+    fake = MemoryClient()
+    client = Mem0ServiceClient(client=fake)
+
+    assert client.is_platform is False
+    client.store_memory("a fact", {"user_id": "alex"})
+    assert fake.add_calls[0][1] == {
+        "user_id": "alex",
+        "agent_id": None,
+        "run_id": None,
+        "metadata": None,
+        "infer": False,
     }
 
 
