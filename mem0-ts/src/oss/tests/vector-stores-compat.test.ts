@@ -1159,10 +1159,13 @@ describe("Databricks – backward compat with mocked clients", () => {
   });
 
   it("retries loading @databricks/sql after a failed dynamic import instead of caching the rejection", async () => {
+    jest.spyOn(console, "error").mockImplementation();
     let shouldFail = true;
     jest.doMock("@databricks/sql", () => {
       if (shouldFail) {
-        throw new Error("Cannot find module '@databricks/sql'");
+        throw Object.assign(new Error("Cannot find module '@databricks/sql'"), {
+          code: "MODULE_NOT_FOUND",
+        });
       }
       const session = {
         executeStatement: jest.fn().mockResolvedValue({
@@ -1193,12 +1196,36 @@ describe("Databricks – backward compat with mocked clients", () => {
 
     await expect((store as any).getSqlModule()).rejects.toThrow(
       "The '@databricks/sql' package is required to use the Databricks vector store. " +
-        "Install it with: npm install @databricks/sql (original error: Cannot find module '@databricks/sql')",
+        "Install it with: npm install @databricks/sql",
     );
 
     shouldFail = false;
     const sqlModule = await (store as any).getSqlModule();
     expect(typeof sqlModule.DBSQLClient).toBe("function");
+  });
+
+  it("preserves transitive @databricks/sql load failures", async () => {
+    jest.spyOn(console, "error").mockImplementation();
+    const transitiveError = Object.assign(
+      new Error("Cannot find module 'uuid'"),
+      { code: "MODULE_NOT_FOUND" },
+    );
+    jest.doMock("@databricks/sql", () => {
+      throw transitiveError;
+    });
+
+    const store = new DatabricksVectorStore({
+      workspaceUrl: "https://workspace.databricks.com",
+      httpPath: "/sql/1.0/warehouses/test",
+      accessToken: "dapi-test",
+      catalog: "main",
+      schema: "default",
+      collectionName: "memories",
+      dimension: 3,
+    });
+    const getSqlModule = Reflect.get(store, "getSqlModule").bind(store);
+
+    await expect(getSqlModule()).rejects.toBe(transitiveError);
   });
 
   it("executeSql(): reconnects on the next call after a session failure instead of reusing a dead session", async () => {
@@ -2777,6 +2804,11 @@ describe("Cassandra – backward compat with mocked client", () => {
 // 6. S3 Vectors — mock AWS client, test interface + init
 // ───────────────────────────────────────────────────────────────────────────
 describe("S3 Vectors – backward compat with mocked client", () => {
+  afterEach(() => {
+    jest.dontMock("@aws-sdk/client-s3vectors");
+    jest.restoreAllMocks();
+  });
+
   function createMockS3VectorsClient(options?: {
     queryDistance?: number;
     queryDistanceMetric?: "cosine" | "euclidean";
@@ -2910,6 +2942,42 @@ describe("S3 Vectors – backward compat with mocked client", () => {
     );
     return match?.[0]?.input;
   }
+
+  it("retries a missing S3 Vectors SDK but preserves transitive load failures", async () => {
+    jest.resetModules();
+    jest.spyOn(console, "error").mockImplementation();
+
+    let loadError = Object.assign(
+      new Error("Cannot find module '@aws-sdk/client-s3vectors'"),
+      { code: "MODULE_NOT_FOUND" },
+    );
+    jest.doMock(
+      "@aws-sdk/client-s3vectors",
+      () => {
+        throw loadError;
+      },
+      { virtual: true },
+    );
+
+    const { S3Vectors } = require("../src/vector_stores/s3_vectors");
+    const store = new S3Vectors({
+      vectorBucketName: "test-bucket",
+      collectionName: "test-index",
+      embeddingModelDims: 3,
+    });
+    const getSdk = Reflect.get(store, "getSdk").bind(store);
+
+    await expect(getSdk()).rejects.toThrow(
+      "The '@aws-sdk/client-s3vectors' package is required to use the S3 Vectors store. " +
+        "Install it with: npm install @aws-sdk/client-s3vectors",
+    );
+
+    loadError = Object.assign(
+      new Error("Cannot find module '@smithy/missing-runtime'"),
+      { code: "MODULE_NOT_FOUND" },
+    );
+    await expect(getSdk()).rejects.toBe(loadError);
+  });
 
   it("implements full VectorStore interface", () => {
     const { S3Vectors } = require("../src/vector_stores/s3_vectors");
@@ -3844,7 +3912,10 @@ describe("Neptune Analytics – backward compat with mocked client", () => {
       "@aws-sdk/client-neptune-graph",
       () => {
         if (shouldFail) {
-          throw new Error("Cannot find module '@aws-sdk/client-neptune-graph'");
+          throw Object.assign(
+            new Error("Cannot find module '@aws-sdk/client-neptune-graph'"),
+            { code: "MODULE_NOT_FOUND" },
+          );
         }
         return {
           ExecuteQueryCommand: class ExecuteQueryCommand {
@@ -3887,6 +3958,34 @@ describe("Neptune Analytics – backward compat with mocked client", () => {
     const client = await (store as any).getClient();
     expect(client).toBeDefined();
     expect(typeof client.send).toBe("function");
+  });
+
+  it("preserves transitive Neptune SDK load failures", async () => {
+    jest.resetModules();
+
+    const transitiveError = Object.assign(
+      new Error("Cannot find module '@smithy/missing-runtime'"),
+      { code: "MODULE_NOT_FOUND" },
+    );
+    jest.doMock(
+      "@aws-sdk/client-neptune-graph",
+      () => {
+        throw transitiveError;
+      },
+      { virtual: true },
+    );
+
+    const {
+      NeptuneAnalyticsVectorStore,
+    } = require("../src/vector_stores/neptune_analytics");
+    const store = new NeptuneAnalyticsVectorStore({
+      graphIdentifier: "g-1234567890",
+      collectionName: "test",
+      dimension: 3,
+    });
+    const getClient = Reflect.get(store, "getClient").bind(store);
+
+    await expect(getClient()).rejects.toBe(transitiveError);
   });
 
   it("shapes Neptune write requests and normalizes search results", async () => {

@@ -1,5 +1,6 @@
 import { VectorStore } from "./base";
 import { SearchFilters, VectorStoreConfig, VectorStoreResult } from "../types";
+import { loadPeer } from "../utils/load_peer";
 
 /**
  * The `@aws-sdk/client-neptune-graph` dependency is loaded on first use via dynamic
@@ -1042,18 +1043,17 @@ export class NeptuneAnalyticsVectorStore implements VectorStore {
    */
   private async getSDK(): Promise<NeptuneSDK> {
     if (!this.sdkPromise) {
-      this.sdkPromise = import("@aws-sdk/client-neptune-graph").then(
-        (sdk) => sdk as unknown as NeptuneSDK,
-        (err) => {
+      this.sdkPromise = loadPeer(
+        "@aws-sdk/client-neptune-graph",
+        "Neptune Analytics vector store",
+        () => import("@aws-sdk/client-neptune-graph"),
+      )
+        .then((sdk) => sdk as unknown as NeptuneSDK)
+        .catch((error) => {
           // Let a later call retry rather than caching the rejection forever.
           this.sdkPromise = undefined;
-          const detail = err instanceof Error ? err.message : String(err);
-          throw new Error(
-            "The '@aws-sdk/client-neptune-graph' package is required to use the Neptune Analytics vector store. " +
-              `Install it with: npm install @aws-sdk/client-neptune-graph (original error: ${detail})`,
-          );
-        },
-      );
+          throw error;
+        });
     }
     return this.sdkPromise;
   }
