@@ -123,6 +123,7 @@ def test_mutation_marker_is_indexed_and_filterable():
     assert {"name": "_mem0_sidecar_mutation_id", "type": "tag"} in DEFAULT_FIELDS
 
     db, mock_index = _make_redis_db()
+    db.client = MagicMock()
     mock_index.search.return_value = MagicMock(docs=[])
 
     db.list(filters={"_mem0_sidecar_mutation_id": marker})
