@@ -405,6 +405,20 @@ describe("AWSBedrockEmbedder", () => {
         cause: expect.objectContaining({ code: "MODULE_NOT_FOUND" }),
       });
     });
+
+    it("preserves a missing transitive AWS SDK dependency", async () => {
+      jest.resetModules();
+      const error = Object.assign(
+        new Error("Cannot find module '@smithy/missing-runtime'"),
+        { code: "MODULE_NOT_FOUND" },
+      );
+      jest.doMock("@aws-sdk/client-bedrock-runtime", () => {
+        throw error;
+      });
+      const embedder = new AWSBedrockEmbedder({});
+
+      await expect(embedder.embed("hello")).rejects.toBe(error);
+    });
   });
 
   describe("client promise retry", () => {

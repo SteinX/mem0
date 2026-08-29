@@ -1,5 +1,6 @@
 import { LLM, LLMResponse } from "./base";
 import { LLMConfig, Message } from "../types";
+import { loadPeer } from "../utils/load_peer";
 
 /**
  * Providers recognised in Bedrock model identifiers, mirroring the Python
@@ -125,18 +126,17 @@ export class AWSBedrockLLM implements LLM {
    */
   private async getSDK(): Promise<BedrockSDK> {
     if (!this.sdkPromise) {
-      this.sdkPromise = import("@aws-sdk/client-bedrock-runtime").then(
-        (sdk) => sdk as unknown as BedrockSDK,
-        (err) => {
+      this.sdkPromise = loadPeer(
+        "@aws-sdk/client-bedrock-runtime",
+        "AWS Bedrock LLM provider",
+        () => import("@aws-sdk/client-bedrock-runtime"),
+      )
+        .then((sdk) => sdk as unknown as BedrockSDK)
+        .catch((error) => {
           // Let a later call retry rather than caching the rejection forever.
           this.sdkPromise = undefined;
-          const detail = err instanceof Error ? err.message : String(err);
-          throw new Error(
-            "The '@aws-sdk/client-bedrock-runtime' package is required to use the AWS Bedrock LLM provider. " +
-              `Install it with: npm install @aws-sdk/client-bedrock-runtime (original error: ${detail})`,
-          );
-        },
-      );
+          throw error;
+        });
     }
     return this.sdkPromise;
   }

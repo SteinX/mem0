@@ -1,5 +1,6 @@
 import { Embedder } from "./base";
 import { EmbeddingConfig } from "../types";
+import { loadPeer } from "../utils/load_peer";
 
 const DEFAULT_MODEL = "amazon.titan-embed-text-v1";
 const DEFAULT_REGION = "us-west-2";
@@ -115,27 +116,11 @@ export class AWSBedrockEmbedder implements Embedder {
   }
 
   private async loadSdk(): Promise<BedrockRuntimeModule> {
-    try {
-      return await import("@aws-sdk/client-bedrock-runtime");
-    } catch (error) {
-      // Only a genuine module-resolution failure gets the friendly install
-      // hint. Node's native ESM loader raises ERR_MODULE_NOT_FOUND; Jest's
-      // and bundlers' CJS-style resolvers raise MODULE_NOT_FOUND. Anything
-      // else (e.g. the package is installed but throws while loading, such
-      // as on a Node version older than the SDK's own engines requirement)
-      // rethrows unchanged instead of being misreported as "not installed".
-      const code = (error as { code?: string } | undefined)?.code;
-      if (code === "ERR_MODULE_NOT_FOUND" || code === "MODULE_NOT_FOUND") {
-        throw Object.assign(
-          new Error(
-            "The '@aws-sdk/client-bedrock-runtime' package is required to use the AWS Bedrock embedder. " +
-              "Install it with: npm install @aws-sdk/client-bedrock-runtime",
-          ),
-          { cause: error },
-        );
-      }
-      throw error;
-    }
+    return loadPeer(
+      "@aws-sdk/client-bedrock-runtime",
+      "AWS Bedrock embedder",
+      () => import("@aws-sdk/client-bedrock-runtime"),
+    );
   }
 
   private async createClient(): Promise<{
