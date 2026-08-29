@@ -123,7 +123,6 @@ def test_mutation_marker_is_indexed_and_filterable():
     assert {"name": "_mem0_sidecar_mutation_id", "type": "tag"} in DEFAULT_FIELDS
 
     db, mock_index = _make_redis_db()
-    db.client = MagicMock()
     mock_index.search.return_value = MagicMock(docs=[])
 
     db.list(filters={"_mem0_sidecar_mutation_id": marker})
@@ -219,19 +218,31 @@ def test_backfill_indexes_mutation_marker_from_legacy_metadata():
 
 
 def test_exact_marker_list_repairs_late_legacy_write():
+    class RedisDocument:
+        def __init__(self, **values):
+            self.__dict__.update(values)
+
+        def __getitem__(self, key):
+            return self.__dict__[key]
+
     db, mock_index = _make_redis_db()
     marker = "d" * 64
     db.client = MagicMock()
-    mock_index.search.return_value = MagicMock(docs=[])
-    db.client.scan_iter.return_value = [b"mem0:test:late"]
-    db.client.hgetall.return_value = {
-        b"memory_id": b"late",
-        b"hash": b"late-hash",
-        b"memory": b"late result",
-        b"created_at": b"0",
-        b"user_id": b"alice",
-        b"metadata": json.dumps({"_mem0_sidecar_mutation_id": marker}).encode(),
-    }
+    mock_index.search.side_effect = [
+        MagicMock(docs=[]),
+        MagicMock(
+            docs=[
+                RedisDocument(
+                    memory_id="late",
+                    hash="late-hash",
+                    memory="late result",
+                    created_at="0",
+                    user_id="alice",
+                    metadata=json.dumps({"_mem0_sidecar_mutation_id": marker}),
+                )
+            ]
+        ),
+    ]
 
     results = db.list(
         filters={"user_id": "alice", "_mem0_sidecar_mutation_id": marker},
@@ -240,10 +251,26 @@ def test_exact_marker_list_repairs_late_legacy_write():
 
     assert results[0][0].id == "late"
     assert results[0][0].payload["_mem0_sidecar_mutation_id"] == marker
+    fallback_query = mock_index.search.call_args_list[1].args[0].query_string()
+    assert "@user_id:{alice}" in fallback_query
+    assert f'@metadata:"{marker}"' in fallback_query
+    db.client.scan_iter.assert_not_called()
     db.client.hset.assert_called_once_with(
-        b"mem0:test:late",
+        "mem0:test:late",
         mapping={"_mem0_sidecar_mutation_id": marker},
     )
+
+
+def test_exact_marker_list_does_not_scan_when_marker_is_absent():
+    db, mock_index = _make_redis_db()
+    db.client = MagicMock()
+    mock_index.search.side_effect = [MagicMock(docs=[]), MagicMock(docs=[])]
+
+    assert db.list(filters={"user_id": "alice", "_mem0_sidecar_mutation_id": "e" * 64}) == [[]]
+
+    assert mock_index.search.call_count == 2
+    db.client.scan_iter.assert_not_called()
+    db.client.hset.assert_not_called()
 
 
 def test_create_col_keeps_distinct_dims_across_instances():

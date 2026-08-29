@@ -8,6 +8,7 @@ import numpy as np
 import pytz
 import valkey
 from pydantic import BaseModel
+from valkey.commands.search.query import Query
 from valkey.exceptions import ResponseError
 
 from mem0.memory.utils import extract_json
@@ -291,28 +292,46 @@ class ValkeyDB(VectorStoreBase):
 
     def _legacy_marker_rows(self, filters, top_k):
         marker = filters.get(_MUTATION_MARKER_KEY)
-        if not marker:
+        if not isinstance(marker, str) or not _MUTATION_MARKER_PATTERN.fullmatch(marker):
             return []
 
+        filter_parts = [
+            f"@{field}:{{{self._escape_tag_value(value)}}}"
+            for field, value in filters.items()
+            if field != _MUTATION_MARKER_KEY and value is not None
+        ]
+        serialized_marker = json.dumps({_MUTATION_MARKER_KEY: marker})
+        only_marker_tag = serialized_marker
+        first_marker_tag = serialized_marker[:-1]
+        middle_marker_tag = serialized_marker[1:-1]
+        last_marker_tag = serialized_marker[1:]
+        marker_tags = [
+            only_marker_tag,
+            first_marker_tag,
+            middle_marker_tag,
+            last_marker_tag,
+        ]
+        escaped_marker_tags = " | ".join(self._escape_tag_value(value) for value in marker_tags)
+        filter_parts.append(f"@metadata:{{{escaped_marker_tags}}}")
+        query = Query(" ".join(filter_parts)).paging(0, top_k if top_k is not None else 1000)
+
         matches = []
-        for key in self.client.scan_iter(match=f"{self.prefix}:*", count=500):
-            values = self._convert_bytes(self.client.hgetall(key))
-            try:
-                metadata = json.loads(extract_json(values.get("metadata", "{}")))
-            except (AttributeError, json.JSONDecodeError, TypeError, UnicodeDecodeError):
+        candidates = self._process_search_results(
+            self.client.ft(self.collection_name).search(query),
+            default_score=0.0,
+        )
+        for result in candidates:
+            if result.payload.get(_MUTATION_MARKER_KEY) != marker:
                 continue
-            if not isinstance(metadata, dict) or metadata.get(_MUTATION_MARKER_KEY) != marker:
-                continue
-            if any(values.get(field) != value for field, value in filters.items() if field != _MUTATION_MARKER_KEY):
+            if any(
+                result.payload.get(field) != value
+                for field, value in filters.items()
+                if field != _MUTATION_MARKER_KEY and value is not None
+            ):
                 continue
 
-            self.client.hset(key, mapping={_MUTATION_MARKER_KEY: marker})
-            key_text = self._convert_bytes(key)
-            vector_id = values.get("memory_id", key_text.removeprefix(f"{self.prefix}:"))
-            payload, memory_id = self._process_document_fields(values, vector_id)
-            matches.append(OutputData(id=memory_id, score=0.0, payload=payload))
-            if top_k is not None and len(matches) >= top_k:
-                break
+            self.client.hset(f"{self.prefix}:{result.id}", mapping={_MUTATION_MARKER_KEY: marker})
+            matches.append(result)
         return matches
 
     def create_col(self, name=None, vector_size=None, distance=None):
@@ -462,7 +481,7 @@ class ValkeyDB(VectorStoreBase):
             logger.error(f"Search failed with query '{query}': {e}")
             raise
 
-    def _process_search_results(self, results):
+    def _process_search_results(self, results, default_score=None):
         """
         Process search results into OutputData objects.
 
@@ -475,7 +494,7 @@ class ValkeyDB(VectorStoreBase):
         memory_results = []
         for doc in results.docs:
             raw_distance = float(doc.vector_score) if hasattr(doc, "vector_score") else None
-            score = max(0.0, 1.0 - raw_distance) if raw_distance is not None else None
+            score = max(0.0, 1.0 - raw_distance) if raw_distance is not None else default_score
 
             # Create the payload
             payload = {

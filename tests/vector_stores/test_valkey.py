@@ -1,5 +1,6 @@
 import json
 from datetime import datetime
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -1080,16 +1081,18 @@ def test_mutation_marker_schema_write_and_legacy_backfill(valkey_db, mock_valkey
 def test_exact_marker_list_repairs_late_legacy_write(valkey_db, mock_valkey_client):
     marker = "b" * 64
     mock_valkey_client.reset_mock()
-    mock_valkey_client.ft.return_value.search.return_value = MagicMock(docs=[])
-    mock_valkey_client.scan_iter.return_value = [b"mem0:test_collection:late"]
-    mock_valkey_client.hgetall.return_value = {
-        b"memory_id": b"late",
-        b"hash": b"late-hash",
-        b"memory": b"late result",
-        b"created_at": b"0",
-        b"user_id": b"alice",
-        b"metadata": json.dumps({"_mem0_sidecar_mutation_id": marker}).encode(),
-    }
+    legacy_doc = SimpleNamespace(
+        memory_id="late",
+        hash="late-hash",
+        memory="late result",
+        created_at="0",
+        user_id="alice",
+        metadata=json.dumps({"_mem0_sidecar_mutation_id": marker}),
+    )
+    mock_valkey_client.ft.return_value.search.side_effect = [
+        MagicMock(docs=[]),
+        MagicMock(docs=[legacy_doc]),
+    ]
 
     results = valkey_db.list(
         filters={"user_id": "alice", "_mem0_sidecar_mutation_id": marker},
@@ -1098,10 +1101,30 @@ def test_exact_marker_list_repairs_late_legacy_write(valkey_db, mock_valkey_clie
 
     assert results[0][0].id == "late"
     assert results[0][0].payload["_mem0_sidecar_mutation_id"] == marker
+    fallback_query = mock_valkey_client.ft.return_value.search.call_args_list[1].args[0].query_string()
+    assert "@user_id:{alice}" in fallback_query
+    assert "@metadata:{" in fallback_query
+    assert f'\\"_mem0_sidecar_mutation_id\\"\\:\\ \\"{marker}\\"' in fallback_query
+    assert " | " in fallback_query
+    mock_valkey_client.scan_iter.assert_not_called()
     mock_valkey_client.hset.assert_called_once_with(
-        b"mem0:test_collection:late",
+        "mem0:test_collection:late",
         mapping={"_mem0_sidecar_mutation_id": marker},
     )
+
+
+def test_exact_marker_list_does_not_scan_when_marker_is_absent(valkey_db, mock_valkey_client):
+    mock_valkey_client.reset_mock()
+    mock_valkey_client.ft.return_value.search.side_effect = [MagicMock(docs=[]), MagicMock(docs=[])]
+
+    assert valkey_db.list(
+        filters={"user_id": "alice", "_mem0_sidecar_mutation_id": "c" * 64},
+        top_k=1000,
+    ) == [[]]
+
+    assert mock_valkey_client.ft.return_value.search.call_count == 2
+    mock_valkey_client.scan_iter.assert_not_called()
+    mock_valkey_client.hset.assert_not_called()
 
 
 def test_escape_tag_value_wildcards(valkey_db):

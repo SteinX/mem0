@@ -117,48 +117,50 @@ class RedisDB(VectorStoreBase):
 
     def _legacy_marker_rows(self, filters, top_k):
         marker = filters.get(_MUTATION_MARKER_KEY)
-        if not marker:
+        if not isinstance(marker, str) or not _MUTATION_MARKER_PATTERN.fullmatch(marker):
             return []
 
         prefix = self.schema["index"]["prefix"]
-        matches = []
-        for key in self.client.scan_iter(match=f"{prefix}:*", count=500):
-            raw_values = self.client.hgetall(key)
-            values = {}
-            for raw_key, raw_value in raw_values.items():
-                field = raw_key.decode("utf-8") if isinstance(raw_key, bytes) else raw_key
-                if isinstance(raw_value, bytes) and field != "embedding":
-                    raw_value = raw_value.decode("utf-8")
-                values[field] = raw_value
+        conditions = [
+            str(Tag(field) == value)
+            for field, value in filters.items()
+            if field != _MUTATION_MARKER_KEY and value is not None
+        ]
+        conditions.append(f'@metadata:"{marker}"')
+        query = Query(" ".join(conditions)).sort_by("created_at", asc=False)
+        query = query.paging(0, top_k if top_k is not None else 1000)
 
+        matches = []
+        for result in self.index.search(query).docs:
             try:
-                metadata = json.loads(extract_json(values.get("metadata", "{}")))
+                metadata = json.loads(extract_json(result["metadata"]))
             except (AttributeError, json.JSONDecodeError, TypeError, UnicodeDecodeError):
                 continue
             if not isinstance(metadata, dict) or metadata.get(_MUTATION_MARKER_KEY) != marker:
                 continue
-            if any(values.get(field) != value for field, value in filters.items() if field != _MUTATION_MARKER_KEY):
+            if any(
+                result[field] != value
+                for field, value in filters.items()
+                if field != _MUTATION_MARKER_KEY and value is not None
+            ):
                 continue
 
-            self.client.hset(key, mapping={_MUTATION_MARKER_KEY: marker})
+            memory_id = result["memory_id"]
+            self.client.hset(f"{prefix}:{memory_id}", mapping={_MUTATION_MARKER_KEY: marker})
             payload = {
-                "hash": values.get("hash", ""),
-                "data": values.get("memory", ""),
-                "created_at": datetime.fromtimestamp(int(values.get("created_at", 0)), tz=timezone.utc).isoformat(
+                "hash": result["hash"],
+                "data": result["memory"],
+                "created_at": datetime.fromtimestamp(int(result["created_at"]), tz=timezone.utc).isoformat(
                     timespec="microseconds"
                 ),
-                **{field: values[field] for field in ["agent_id", "run_id", "user_id"] if field in values},
+                **{field: result[field] for field in ["agent_id", "run_id", "user_id"] if field in result.__dict__},
                 **metadata,
             }
-            if values.get("updated_at"):
-                payload["updated_at"] = datetime.fromtimestamp(int(values["updated_at"]), tz=timezone.utc).isoformat(
+            if result.__dict__.get("updated_at"):
+                payload["updated_at"] = datetime.fromtimestamp(int(result["updated_at"]), tz=timezone.utc).isoformat(
                     timespec="microseconds"
                 )
-            key_text = key.decode("utf-8") if isinstance(key, bytes) else key
-            memory_id = values.get("memory_id", key_text.removeprefix(f"{prefix}:"))
             matches.append(MemoryResult(id=memory_id, payload=payload))
-            if top_k is not None and len(matches) >= top_k:
-                break
         return matches
 
     def create_col(self, name=None, vector_size=None, distance=None):
