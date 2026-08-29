@@ -104,6 +104,7 @@ export default class MemoryClient {
   client: any;
   telemetryId: string;
   private initialized: Promise<void>;
+  private identityAttempt?: Promise<ClientIdentity>;
   private identityCacheMax: number;
 
   _validateApiKey(): any {
@@ -149,7 +150,7 @@ export default class MemoryClient {
   }
 
   // One ping per credential pair per process, shared via identityByCredentials.
-  private _resolveIdentity(): Promise<void> {
+  private _resolveIdentity(forceRefresh = false): Promise<void> {
     const credentials = `${this.host}\u0000${this.apiKey}`;
     let shared: Promise<ClientIdentity> | undefined;
     if (this.identityCacheMax === 0) {
@@ -159,6 +160,12 @@ export default class MemoryClient {
         identityByCredentials.delete(
           identityByCredentials.keys().next().value!,
         );
+      }
+      if (
+        forceRefresh &&
+        identityByCredentials.get(credentials) === this.identityAttempt
+      ) {
+        identityByCredentials.delete(credentials);
       }
       shared = identityByCredentials.get(credentials);
       if (!shared) {
@@ -171,10 +178,16 @@ export default class MemoryClient {
         identityByCredentials.set(credentials, shared);
         // A failed ping must not be cached, or the process never recovers.
         shared.then((identity) => {
-          if (!identity.telemetryId) identityByCredentials.delete(credentials);
+          if (
+            !identity.telemetryId &&
+            identityByCredentials.get(credentials) === shared
+          ) {
+            identityByCredentials.delete(credentials);
+          }
         });
       }
     }
+    this.identityAttempt = shared;
     return shared.then((identity) => {
       this.telemetryId = identity.telemetryId;
       if (identity.organizationId != null)
@@ -188,12 +201,10 @@ export default class MemoryClient {
     const attempted = this.initialized;
     await attempted;
     if (
-      !this.telemetryId &&
-      this.organizationId == null &&
-      this.projectId == null &&
+      (this.organizationId == null || this.projectId == null) &&
       this.initialized === attempted
     ) {
-      this.initialized = this._resolveIdentity();
+      this.initialized = this._resolveIdentity(true);
     }
     if (this.initialized !== attempted) await this.initialized;
   }

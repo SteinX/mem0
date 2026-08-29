@@ -328,27 +328,47 @@ describe("MemoryClient - unresolved identity", () => {
     );
   });
 
-  test("does not retry a successful partial identity", async () => {
-    const responses = new Map<string, { status: number; body: unknown }>();
-    responses.set("/v1/ping/", {
-      status: 200,
-      body: {
-        status: "ok",
-        org_id: TEST_ORG_ID,
-        user_email: "test@example.com",
-      },
+  test("refreshes a cached partial identity", async () => {
+    let pings = 0;
+    const mock = jest.fn((url: string) => {
+      if (url.includes("/v1/ping/")) {
+        pings += 1;
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: () => Promise.resolve(""),
+          json: () =>
+            Promise.resolve(
+              pings === 1
+                ? {
+                    status: "ok",
+                    org_id: TEST_ORG_ID,
+                    user_email: "test@example.com",
+                  }
+                : {
+                    status: "ok",
+                    org_id: TEST_ORG_ID,
+                    project_id: TEST_PROJECT_ID,
+                    user_email: "test@example.com",
+                  },
+            ),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve(""),
+        json: () => Promise.resolve({}),
+      });
     });
-    const mock = setupMockFetch(responses);
+    global.fetch = mock as unknown as typeof global.fetch;
 
-    await expect(freshClient().getProject({ fields: [] })).rejects.toThrow(
-      "organizationId and projectId must be set",
+    await freshClient().getProject({ fields: [] });
+
+    expect(pings).toBe(2);
+    expect(findUrl(mock, "/api/v1/orgs/organizations/")).toContain(
+      `/api/v1/orgs/organizations/${TEST_ORG_ID}/projects/${TEST_PROJECT_ID}/`,
     );
-
-    expect(
-      mock.mock.calls.filter((call: [string, RequestInit]) =>
-        call[0].includes("/v1/ping/"),
-      ),
-    ).toHaveLength(1);
   });
 
   test("getProject reports the unset ids", async () => {
