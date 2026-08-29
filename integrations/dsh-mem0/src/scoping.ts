@@ -20,21 +20,18 @@ export interface EntityParams {
 
 const clean = (v: string | undefined) => v?.trim() || undefined;
 
-export type SearchFilters = Record<string, string | SearchFilters[]>;
+export type SearchFilters = Record<string, string>;
 
-/** Search: OR speaker attribution while preserving the run boundary. */
 export function resolveSearchFilters(
   params: EntityParams,
   defaultUserId: string,
 ): SearchFilters {
-  const speakers: SearchFilters[] = [
-    { user_id: defaultUserId },
-  ];
+  const filters: SearchFilters = { user_id: defaultUserId };
   const agentId = clean(params.agentId);
-  if (agentId) speakers.push({ agent_id: agentId });
-  const speakerScope = speakers.length === 1 ? speakers[0] : { OR: speakers };
+  if (agentId) filters.agent_id = agentId;
   const runId = clean(params.runId);
-  return runId ? { AND: [speakerScope, { run_id: runId }] } : speakerScope;
+  if (runId) filters.run_id = runId;
+  return filters;
 }
 
 /** Add: camelCase, top-level params run through the SDK's camel->snake converter. */

@@ -111,6 +111,25 @@ describe("search_memory tool", () => {
     });
   });
 
+  it("keeps configured user mandatory when agent and run scopes are provided", async () => {
+    mockSearch.mockResolvedValue({ results: [] });
+    const tools = applyAndCollect({ apiKey: "k", userId: "alice" });
+
+    await tools.get("search_memory")!.execute(
+      { query: "x", agentId: "shared-agent", runId: "run-9" },
+      {},
+    );
+
+    expect(mockSearch).toHaveBeenCalledWith("x", {
+      filters: {
+        user_id: "alice",
+        agent_id: "shared-agent",
+        run_id: "run-9",
+      },
+      topK: 10,
+    });
+  });
+
   it("returns a graceful failure line instead of rejecting on error", async () => {
     mockSearch.mockRejectedValue(new Error("network down"));
     const tools = applyAndCollect({ apiKey: "k", userId: "u" });

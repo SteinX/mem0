@@ -6,20 +6,19 @@ describe("resolveSearchFilters (snake_case, for filters)", () => {
     expect(resolveSearchFilters({}, "default-user")).toEqual({ user_id: "default-user" });
   });
 
-  it("ORs speaker attribution while retaining the run boundary", () => {
+  it("keeps configured user, agent, and run as mandatory filters", () => {
     expect(
       resolveSearchFilters({ agentId: "agent-1", runId: "run-9" }, "alice"),
     ).toEqual({
-      AND: [
-        { OR: [{ user_id: "alice" }, { agent_id: "agent-1" }] },
-        { run_id: "run-9" },
-      ],
+      user_id: "alice",
+      agent_id: "agent-1",
+      run_id: "run-9",
     });
   });
 
   it("omits blank agent/run scope", () => {
     const f = resolveSearchFilters({ agentId: "  ", runId: "run-9" }, "default");
-    expect(f).toEqual({ AND: [{ user_id: "default" }, { run_id: "run-9" }] });
+    expect(f).toEqual({ user_id: "default", run_id: "run-9" });
   });
 });
 
