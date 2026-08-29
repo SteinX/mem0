@@ -183,6 +183,26 @@ def test_platform_search_uses_filters():
     assert "user_id" not in kwargs
 
 
+def test_platform_search_ors_speakers_inside_app_and_run_boundaries():
+    fake = MemoryClient()
+    client = Mem0ServiceClient(client=fake)
+
+    client.search_memories(
+        "q",
+        {"user_id": "alex", "agent_id": "assistant", "app_id": "repo", "run_id": "session"},
+        5,
+    )
+
+    _, kwargs = fake.search_calls[0]
+    assert kwargs["filters"] == {
+        "AND": [
+            {"OR": [{"user_id": "alex"}, {"agent_id": "assistant"}]},
+            {"app_id": "repo"},
+            {"run_id": "session"},
+        ]
+    }
+
+
 def test_oss_search_uses_filters():
     """OSS search also takes filters + top_k. The strict fake would raise on the
     old top-level/limit call shape, so this is the regression test for blocker 1."""

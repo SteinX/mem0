@@ -159,8 +159,21 @@ class Mem0ServiceClient:
         response is normalized to a plain list of memory dicts.
         """
         self._check_scope(scope)
-        response = self.mem0.search(query, filters=dict(scope), top_k=top_k)
+        filters = _platform_search_filters(scope) if self.is_platform else dict(scope)
+        response = self.mem0.search(query, filters=filters, top_k=top_k)
         return _extract_results(response)
+
+
+def _platform_search_filters(scope: dict[str, str]) -> dict[str, Any]:
+    speakers = [{key: scope[key]} for key in ("user_id", "agent_id") if key in scope]
+    boundaries = [{key: scope[key]} for key in ("app_id", "run_id") if key in scope]
+    clauses: list[dict[str, Any]] = []
+    if len(speakers) == 1:
+        clauses.append(speakers[0])
+    elif speakers:
+        clauses.append({"OR": speakers})
+    clauses.extend(boundaries)
+    return clauses[0] if len(clauses) == 1 else {"AND": clauses}
 
 
 def _extract_results(response: Any) -> list[dict[str, Any]]:

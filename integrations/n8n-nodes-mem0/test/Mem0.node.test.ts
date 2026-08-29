@@ -152,7 +152,7 @@ describe('Mem0 node (offline)', () => {
 		expect(ctx.requests[0].body.filters).toEqual({ user_id: 'u1' });
 	});
 
-	it('combines entity ids with OR, never AND (entities are stored separately, so AND matches nothing)', async () => {
+	it('ORs speaker ids while keeping app and run as mandatory boundaries', async () => {
 		const ctx = makeCtx(
 			'search',
 			{ query: 'x', userId: 'u1', agentId: 'a1', appId: 'p1', runId: 'r1' },
@@ -160,7 +160,11 @@ describe('Mem0 node (offline)', () => {
 		);
 		await run(ctx);
 		expect(ctx.requests[0].body.filters).toEqual({
-			OR: [{ user_id: 'u1' }, { agent_id: 'a1' }, { app_id: 'p1' }, { run_id: 'r1' }],
+			AND: [
+				{ OR: [{ user_id: 'u1' }, { agent_id: 'a1' }] },
+				{ app_id: 'p1' },
+				{ run_id: 'r1' },
+			],
 		});
 	});
 

@@ -80,14 +80,14 @@ describe("search_memory tool", () => {
     });
   });
 
-  it("honors a per-call userId override and limit", async () => {
+  it("keeps the configured user boundary when tool input includes a userId", async () => {
     mockSearch.mockResolvedValue({ results: [] });
     const tools = applyAndCollect({ apiKey: "k", userId: "u" });
 
     await tools.get("search_memory")!.execute({ query: "x", userId: "alice", limit: 3 }, {});
 
     expect(mockSearch).toHaveBeenCalledWith("x", {
-      filters: { user_id: "alice" },
+      filters: { user_id: "u" },
       topK: 3,
     });
   });

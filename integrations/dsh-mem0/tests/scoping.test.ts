@@ -6,28 +6,20 @@ describe("resolveSearchFilters (snake_case, for filters)", () => {
     expect(resolveSearchFilters({}, "default-user")).toEqual({ user_id: "default-user" });
   });
 
-  it("lets a per-call userId override the default", () => {
-    expect(resolveSearchFilters({ userId: "alice" }, "default-user")).toEqual({
-      user_id: "alice",
-    });
-  });
-
-  it("treats a blank/whitespace userId as absent and falls back", () => {
-    expect(resolveSearchFilters({ userId: "   " }, "default-user")).toEqual({
-      user_id: "default-user",
-    });
-  });
-
-  it("includes snake_case agent/run scope only when provided", () => {
+  it("ORs speaker attribution while retaining the run boundary", () => {
     expect(
-      resolveSearchFilters({ userId: "alice", agentId: "agent-1", runId: "run-9" }, "d"),
-    ).toEqual({ user_id: "alice", agent_id: "agent-1", run_id: "run-9" });
+      resolveSearchFilters({ agentId: "agent-1", runId: "run-9" }, "alice"),
+    ).toEqual({
+      AND: [
+        { OR: [{ user_id: "alice" }, { agent_id: "agent-1" }] },
+        { run_id: "run-9" },
+      ],
+    });
   });
 
   it("omits blank agent/run scope", () => {
     const f = resolveSearchFilters({ agentId: "  ", runId: "run-9" }, "default");
-    expect(f).toEqual({ user_id: "default", run_id: "run-9" });
-    expect(f).not.toHaveProperty("agent_id");
+    expect(f).toEqual({ AND: [{ user_id: "default" }, { run_id: "run-9" }] });
   });
 });
 
@@ -38,7 +30,7 @@ describe("resolveAddParams (camelCase, for top-level add params)", () => {
 
   it("includes camelCase agent/run scope only when provided", () => {
     expect(
-      resolveAddParams({ userId: "alice", agentId: "agent-1", runId: "run-9" }, "d"),
+      resolveAddParams({ agentId: "agent-1", runId: "run-9" }, "alice"),
     ).toEqual({ userId: "alice", agentId: "agent-1", runId: "run-9" });
   });
 });

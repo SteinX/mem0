@@ -582,9 +582,17 @@ function buildEntityFilters(
 	ctx: IExecuteFunctions,
 	itemIndex: number,
 ): IDataObject {
-	const clauses: IDataObject[] = Object.entries(ids)
-		.filter(([, value]) => value)
-		.map(([key, value]) => ({ [key]: value }));
+	const speakerClauses = ['user_id', 'agent_id']
+		.filter((key) => ids[key])
+		.map((key) => ({ [key]: ids[key] }));
+	const boundaryClauses = ['app_id', 'run_id']
+		.filter((key) => ids[key])
+		.map((key) => ({ [key]: ids[key] }));
+	const clauses: IDataObject[] = [];
+
+	if (speakerClauses.length === 1) clauses.push(speakerClauses[0]);
+	if (speakerClauses.length > 1) clauses.push({ OR: speakerClauses });
+	clauses.push(...boundaryClauses);
 
 	if (clauses.length === 0) {
 		throw new NodeOperationError(
@@ -594,7 +602,7 @@ function buildEntityFilters(
 		);
 	}
 
-	return clauses.length === 1 ? clauses[0] : { OR: clauses };
+	return clauses.length === 1 ? clauses[0] : { AND: clauses };
 }
 
 // Polls GET /v1/event/{id}/ until the memory-addition event resolves.

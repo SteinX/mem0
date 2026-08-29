@@ -27,17 +27,17 @@ jobs:
       run:
         working-directory: integrations/n8n-nodes-mem0
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ inputs.tag }}
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa
         with:
           version: 9
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
@@ -54,7 +54,7 @@ jobs:
         run: |
           if [ "${{ inputs.prerelease }}" = "true" ]; then
             PREID=$(node -p "require('./package.json').version.split('-')[1].split('.')[0]")
-            npx npm@latest publish --provenance --access public --tag "$PREID"
+            npx npm@12.0.2 publish --provenance --access public --tag "$PREID"
           else
-            npx npm@latest publish --provenance --access public
+            npx npm@12.0.2 publish --provenance --access public
           fi

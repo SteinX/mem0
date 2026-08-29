@@ -47,15 +47,9 @@ const textOutput = {
   ],
 };
 
-// Optional per-call scoping params, shared by both tools. A single harness
-// install can serve more than one entity, so the model may override the
-// mount-time default per call (see scoping.ts).
+// Optional per-call subscopes shared by both tools. The configured userId is a
+// trusted tenant boundary and is never exposed as a model-callable parameter.
 const scopeParams = {
-  userId: {
-    type: "string",
-    description:
-      "Entity that owns the memory. Defaults to the plugin's configured userId; set this only to read or write another user's memories.",
-  },
   agentId: {
     type: "string",
     description: "Optional agent scope, to partition memories by agent.",
@@ -97,8 +91,8 @@ export function apply(ctx: Context, config: Config): void {
         ...scopeParams,
       },
       output: textOutput,
-      async execute({ query, limit, userId: u, agentId, runId }) {
-        const filters = resolveSearchFilters({ userId: u, agentId, runId }, userId);
+      async execute({ query, limit, agentId, runId }) {
+        const filters = resolveSearchFilters({ agentId, runId }, userId);
         try {
           const topK = limit && limit > 0 ? limit : DEFAULT_SEARCH_LIMIT;
           const { results } = await client.search(query, { filters, topK });
@@ -121,8 +115,8 @@ export function apply(ctx: Context, config: Config): void {
         ...scopeParams,
       },
       output: textOutput,
-      async execute({ text, userId: u, agentId, runId }) {
-        const addParams = resolveAddParams({ userId: u, agentId, runId }, userId);
+      async execute({ text, agentId, runId }) {
+        const addParams = resolveAddParams({ agentId, runId }, userId);
         try {
           const result = await client.add([{ role: "user", content: text }], {
             ...addParams,
