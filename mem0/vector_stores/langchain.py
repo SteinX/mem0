@@ -197,8 +197,8 @@ class Langchain(VectorStoreBase):
                 # Convert mem0 filters to Chroma where clause if needed
                 where_clause = None
                 if filters:
-                    # Handle all filters, not just user_id
-                    where_clause = filters
+                    conditions = [{key: value} for key, value in filters.items()]
+                    where_clause = conditions[0] if len(conditions) == 1 else {"$and": conditions}
 
                 result = self.client._collection.get(where=where_clause, limit=top_k)
 
