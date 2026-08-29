@@ -128,7 +128,8 @@ def test_injected_platform_subclass_preserves_platform_routing():
     )
     assert fake.search_calls[0][1]["filters"] == {
         "AND": [
-            {"OR": [{"user_id": "alex"}, {"agent_id": "assistant"}]},
+            {"user_id": "alex"},
+            {"agent_id": "assistant"},
             {"app_id": "repo"},
         ]
     }
@@ -231,7 +232,7 @@ def test_platform_search_uses_filters():
     assert "user_id" not in kwargs
 
 
-def test_platform_search_ors_speakers_inside_app_and_run_boundaries():
+def test_platform_search_ands_all_supplied_entity_scopes():
     client, fake = platform_client()
 
     client.search_memories(
@@ -243,7 +244,8 @@ def test_platform_search_ors_speakers_inside_app_and_run_boundaries():
     _, kwargs = fake.search_calls[0]
     assert kwargs["filters"] == {
         "AND": [
-            {"OR": [{"user_id": "alex"}, {"agent_id": "assistant"}]},
+            {"user_id": "alex"},
+            {"agent_id": "assistant"},
             {"app_id": "repo"},
             {"run_id": "session"},
         ]

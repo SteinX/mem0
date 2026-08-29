@@ -130,23 +130,23 @@ describe('search / get array-shape enforcement (offline)', () => {
 		expect(res).toHaveLength(1);
 	});
 
-	it('search ORs user and agent attribution scopes', async () => {
+	it('search ANDs user and agent tenant scopes', async () => {
 		const z = makeZ([{ data: { results: [] } }]);
 		await searchMemories.operation.perform(z, {
 			inputData: { query: 'x', user_id: 'u1', agent_id: 'a1' },
 		} as unknown as Bundle);
 		expect(z.requests[0].body.filters).toEqual({
-			OR: [{ user_id: 'u1' }, { agent_id: 'a1' }],
+			AND: [{ user_id: 'u1' }, { agent_id: 'a1' }],
 		});
 	});
 
-	it('search keeps run scope outside the speaker OR', async () => {
+	it('search ANDs run scope with user and agent', async () => {
 		const z = makeZ([{ data: { results: [] } }]);
 		await searchMemories.operation.perform(z, {
 			inputData: { query: 'x', user_id: 'u1', agent_id: 'a1', run_id: 'r1' },
 		} as unknown as Bundle);
 		expect(z.requests[0].body.filters).toEqual({
-			AND: [{ OR: [{ user_id: 'u1' }, { agent_id: 'a1' }] }, { run_id: 'r1' }],
+			AND: [{ user_id: 'u1' }, { agent_id: 'a1' }, { run_id: 'r1' }],
 		});
 	});
 
@@ -156,7 +156,7 @@ describe('search / get array-shape enforcement (offline)', () => {
 			inputData: { user_id: 'u1', agent_id: 'a1', run_id: 'r1' },
 		} as unknown as Bundle);
 		expect(z.requests[0].body.filters).toEqual({
-			AND: [{ OR: [{ user_id: 'u1' }, { agent_id: 'a1' }] }, { run_id: 'r1' }],
+			AND: [{ user_id: 'u1' }, { agent_id: 'a1' }, { run_id: 'r1' }],
 		});
 	});
 

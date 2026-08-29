@@ -170,14 +170,7 @@ class Mem0ServiceClient:
 
 
 def _platform_search_filters(scope: dict[str, str]) -> dict[str, Any]:
-    speakers = [{key: scope[key]} for key in ("user_id", "agent_id") if key in scope]
-    boundaries = [{key: scope[key]} for key in ("app_id", "run_id") if key in scope]
-    clauses: list[dict[str, Any]] = []
-    if len(speakers) == 1:
-        clauses.append(speakers[0])
-    elif speakers:
-        clauses.append({"OR": speakers})
-    clauses.extend(boundaries)
+    clauses = [{key: scope[key]} for key in ("user_id", "agent_id", "app_id", "run_id") if key in scope]
     return clauses[0] if len(clauses) == 1 else {"AND": clauses}
 
 

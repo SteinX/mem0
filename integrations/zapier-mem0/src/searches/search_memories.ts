@@ -6,12 +6,11 @@ const perform = async (z: ZObject, bundle: Bundle): Promise<Memory[]> => {
 		output_format: 'v1.1',
 		top_k: Math.max(1, Math.floor(Number(bundle.inputData.limit) || 50)),
 	};
-	const speakers = [
+	const clauses = [
 		bundle.inputData.user_id && { user_id: bundle.inputData.user_id },
 		bundle.inputData.agent_id && { agent_id: bundle.inputData.agent_id },
+		bundle.inputData.run_id && { run_id: bundle.inputData.run_id },
 	].filter(Boolean);
-	const clauses: unknown[] = speakers.length > 1 ? [{ OR: speakers }] : speakers;
-	if (bundle.inputData.run_id) clauses.push({ run_id: bundle.inputData.run_id });
 	if (clauses.length > 0) body.filters = clauses.length === 1 ? clauses[0] : { AND: clauses };
 
 	const response = await z.request({
