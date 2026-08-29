@@ -26,6 +26,24 @@ describe("loadPeer", () => {
     },
   );
 
+  it("adds an install hint when a top-level peer subpath is missing", async () => {
+    const cause = Object.assign(
+      new Error("Cannot find module 'mysql2/promise'"),
+      {
+        code: "MODULE_NOT_FOUND",
+      },
+    );
+
+    await expect(
+      loadPeer("mysql2", "Azure MySQL store", async () => {
+        throw cause;
+      }),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining("npm install mysql2"),
+      cause,
+    });
+  });
+
   it("preserves a missing transitive dependency", async () => {
     const error = Object.assign(
       new Error("Cannot find module 'peer-transitive'"),

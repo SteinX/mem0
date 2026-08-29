@@ -13,7 +13,7 @@ export async function loadPeer(
     )?.[1];
     if (
       (code === "ERR_MODULE_NOT_FOUND" || code === "MODULE_NOT_FOUND") &&
-      missing === pkg
+      (missing === pkg || missing?.startsWith(`${pkg}/`))
     ) {
       throw Object.assign(
         new Error(
