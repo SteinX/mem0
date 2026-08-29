@@ -26,7 +26,7 @@ describe("loadPeer", () => {
     },
   );
 
-  it("adds an install hint when a top-level peer subpath is missing", async () => {
+  it("adds an install hint when the requested peer subpath is missing", async () => {
     const cause = Object.assign(
       new Error("Cannot find module 'mysql2/promise'"),
       {
@@ -35,13 +35,31 @@ describe("loadPeer", () => {
     );
 
     await expect(
-      loadPeer("mysql2", "Azure MySQL store", async () => {
-        throw cause;
-      }),
+      loadPeer(
+        "mysql2",
+        "Azure MySQL store",
+        async () => {
+          throw cause;
+        },
+        { specifier: "mysql2/promise" },
+      ),
     ).rejects.toMatchObject({
       message: expect.stringContaining("npm install mysql2"),
       cause,
     });
+  });
+
+  it("preserves a missing internal peer self-reference", async () => {
+    const error = Object.assign(
+      new Error("Cannot find module '@databricks/sql/internal'"),
+      { code: "MODULE_NOT_FOUND" },
+    );
+
+    await expect(
+      loadPeer("@databricks/sql", "Databricks store", async () => {
+        throw error;
+      }),
+    ).rejects.toBe(error);
   });
 
   it("preserves a missing transitive dependency", async () => {

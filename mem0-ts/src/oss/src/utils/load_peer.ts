@@ -1,5 +1,6 @@
 function missingPeerError(
   pkg: string,
+  specifier: string,
   label: string,
   error: unknown,
 ): Error | undefined {
@@ -10,7 +11,7 @@ function missingPeerError(
   )?.[1];
   if (
     (code === "ERR_MODULE_NOT_FOUND" || code === "MODULE_NOT_FOUND") &&
-    (missing === pkg || missing?.startsWith(`${pkg}/`))
+    (missing === pkg || missing === specifier)
   ) {
     return Object.assign(
       new Error(
@@ -25,18 +26,28 @@ export async function loadPeer(
   pkg: string,
   label: string,
   load: () => Promise<any>,
+  options: { specifier?: string } = {},
 ): Promise<any> {
   try {
     return await load();
   } catch (error) {
-    throw missingPeerError(pkg, label, error) ?? error;
+    throw (
+      missingPeerError(pkg, options.specifier ?? pkg, label, error) ?? error
+    );
   }
 }
 
-export function loadPeerSync<T>(pkg: string, label: string, load: () => T): T {
+export function loadPeerSync<T>(
+  pkg: string,
+  label: string,
+  load: () => T,
+  options: { specifier?: string } = {},
+): T {
   try {
     return load();
   } catch (error) {
-    throw missingPeerError(pkg, label, error) ?? error;
+    throw (
+      missingPeerError(pkg, options.specifier ?? pkg, label, error) ?? error
+    );
   }
 }

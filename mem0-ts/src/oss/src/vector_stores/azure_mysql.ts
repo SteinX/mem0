@@ -99,6 +99,7 @@ export class AzureMySQLDB implements VectorStore {
       "mysql2",
       "Azure MySQL vector store",
       () => import("mysql2/promise"),
+      { specifier: "mysql2/promise" },
     );
 
     this.pool = createPool({
