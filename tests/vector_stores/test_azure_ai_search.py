@@ -293,7 +293,7 @@ def test_create_col(azure_ai_search_instance):
     assert "user_id" in field_names
     assert "run_id" in field_names
     assert "agent_id" in field_names
-    assert "_mem0_sidecar_mutation_id" in field_names
+    assert "mem0_sidecar_mutation_id" in field_names
 
     # Check that id is the key field
     id_field = next(f for f in index.fields if f.name == "id")
@@ -531,7 +531,7 @@ def test_update_allows_empty_payload(azure_ai_search_instance):
                 "user_id": None,
                 "run_id": None,
                 "agent_id": None,
-                "_mem0_sidecar_mutation_id": None,
+                "mem0_sidecar_mutation_id": None,
             }
         ]
     )
@@ -704,7 +704,7 @@ def test_mutation_marker_is_filterable_persisted_and_backfilled(azure_ai_search_
     instance, search_client, index_client = azure_ai_search_instance
     marker = "a" * 64
     index = index_client.create_or_update_index.call_args.args[0]
-    marker_field = next(field for field in index.fields if field.name == "_mem0_sidecar_mutation_id")
+    marker_field = next(field for field in index.fields if field.name == "mem0_sidecar_mutation_id")
     assert marker_field.filterable is True
 
     document = instance._generate_document(
@@ -712,7 +712,7 @@ def test_mutation_marker_is_filterable_persisted_and_backfilled(azure_ai_search_
         {"data": "memory", "_mem0_sidecar_mutation_id": marker},
         "memory-1",
     )
-    assert document["_mem0_sidecar_mutation_id"] == marker
+    assert document["mem0_sidecar_mutation_id"] == marker
 
     search_client.search.return_value = [
         {
@@ -723,7 +723,10 @@ def test_mutation_marker_is_filterable_persisted_and_backfilled(azure_ai_search_
     search_client.merge_or_upload_documents.reset_mock()
     instance._backfill_mutation_marker_field()
     search_client.merge_or_upload_documents.assert_called_once_with(
-        documents=[{"id": "legacy", "_mem0_sidecar_mutation_id": marker}]
+        documents=[{"id": "legacy", "mem0_sidecar_mutation_id": marker}]
+    )
+    assert instance._build_filter_expression({"_mem0_sidecar_mutation_id": marker}) == (
+        f"mem0_sidecar_mutation_id eq '{marker}'"
     )
 
 

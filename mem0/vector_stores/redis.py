@@ -115,6 +115,52 @@ class RedisDB(VectorStoreBase):
         finally:
             self.client.delete(lock_key)
 
+    def _legacy_marker_rows(self, filters, top_k):
+        marker = filters.get(_MUTATION_MARKER_KEY)
+        if not marker:
+            return []
+
+        prefix = self.schema["index"]["prefix"]
+        matches = []
+        for key in self.client.scan_iter(match=f"{prefix}:*", count=500):
+            raw_values = self.client.hgetall(key)
+            values = {}
+            for raw_key, raw_value in raw_values.items():
+                field = raw_key.decode("utf-8") if isinstance(raw_key, bytes) else raw_key
+                if isinstance(raw_value, bytes) and field != "embedding":
+                    raw_value = raw_value.decode("utf-8")
+                values[field] = raw_value
+
+            try:
+                metadata = json.loads(extract_json(values.get("metadata", "{}")))
+            except (AttributeError, json.JSONDecodeError, TypeError, UnicodeDecodeError):
+                continue
+            if not isinstance(metadata, dict) or metadata.get(_MUTATION_MARKER_KEY) != marker:
+                continue
+            if any(values.get(field) != value for field, value in filters.items() if field != _MUTATION_MARKER_KEY):
+                continue
+
+            self.client.hset(key, mapping={_MUTATION_MARKER_KEY: marker})
+            payload = {
+                "hash": values.get("hash", ""),
+                "data": values.get("memory", ""),
+                "created_at": datetime.fromtimestamp(int(values.get("created_at", 0)), tz=timezone.utc).isoformat(
+                    timespec="microseconds"
+                ),
+                **{field: values[field] for field in ["agent_id", "run_id", "user_id"] if field in values},
+                **metadata,
+            }
+            if values.get("updated_at"):
+                payload["updated_at"] = datetime.fromtimestamp(int(values["updated_at"]), tz=timezone.utc).isoformat(
+                    timespec="microseconds"
+                )
+            key_text = key.decode("utf-8") if isinstance(key, bytes) else key
+            memory_id = values.get("memory_id", key_text.removeprefix(f"{prefix}:"))
+            matches.append(MemoryResult(id=memory_id, payload=payload))
+            if top_k is not None and len(matches) >= top_k:
+                break
+        return matches
+
     def create_col(self, name=None, vector_size=None, distance=None):
         """
         Create a new collection (index) in Redis.
@@ -374,33 +420,30 @@ class RedisDB(VectorStoreBase):
             query = query.paging(0, top_k)
 
         results = self.index.search(query)
-        return [
-            [
-                MemoryResult(
-                    id=result["memory_id"],
-                    payload={
-                        "hash": result["hash"],
-                        "data": result["memory"],
-                        "created_at": datetime.fromtimestamp(
-                            int(result["created_at"]), tz=timezone.utc
-                        ).isoformat(timespec="microseconds"),
-                        **(
-                            {
-                                "updated_at": datetime.fromtimestamp(
-                                    int(result["updated_at"]), tz=timezone.utc
-                                ).isoformat(timespec="microseconds")
-                            }
-                            if result.__dict__.get("updated_at")
-                            else {}
-                        ),
-                        **{
-                            field: result[field]
-                            for field in ["agent_id", "run_id", "user_id"]
-                            if field in result.__dict__
-                        },
-                        **{k: v for k, v in json.loads(extract_json(result["metadata"])).items()},
-                    },
-                )
-                for result in results.docs
-            ]
+        memory_results = [
+            MemoryResult(
+                id=result["memory_id"],
+                payload={
+                    "hash": result["hash"],
+                    "data": result["memory"],
+                    "created_at": datetime.fromtimestamp(int(result["created_at"]), tz=timezone.utc).isoformat(
+                        timespec="microseconds"
+                    ),
+                    **(
+                        {
+                            "updated_at": datetime.fromtimestamp(int(result["updated_at"]), tz=timezone.utc).isoformat(
+                                timespec="microseconds"
+                            )
+                        }
+                        if result.__dict__.get("updated_at")
+                        else {}
+                    ),
+                    **{field: result[field] for field in ["agent_id", "run_id", "user_id"] if field in result.__dict__},
+                    **{k: v for k, v in json.loads(extract_json(result["metadata"])).items()},
+                },
+            )
+            for result in results.docs
         ]
+        if not memory_results and filters and filters.get(_MUTATION_MARKER_KEY):
+            memory_results = self._legacy_marker_rows(filters, top_k)
+        return [memory_results]

@@ -1077,6 +1077,33 @@ def test_mutation_marker_schema_write_and_legacy_backfill(valkey_db, mock_valkey
     )
 
 
+def test_exact_marker_list_repairs_late_legacy_write(valkey_db, mock_valkey_client):
+    marker = "b" * 64
+    mock_valkey_client.reset_mock()
+    mock_valkey_client.ft.return_value.search.return_value = MagicMock(docs=[])
+    mock_valkey_client.scan_iter.return_value = [b"mem0:test_collection:late"]
+    mock_valkey_client.hgetall.return_value = {
+        b"memory_id": b"late",
+        b"hash": b"late-hash",
+        b"memory": b"late result",
+        b"created_at": b"0",
+        b"user_id": b"alice",
+        b"metadata": json.dumps({"_mem0_sidecar_mutation_id": marker}).encode(),
+    }
+
+    results = valkey_db.list(
+        filters={"user_id": "alice", "_mem0_sidecar_mutation_id": marker},
+        top_k=1000,
+    )
+
+    assert results[0][0].id == "late"
+    assert results[0][0].payload["_mem0_sidecar_mutation_id"] == marker
+    mock_valkey_client.hset.assert_called_once_with(
+        b"mem0:test_collection:late",
+        mapping={"_mem0_sidecar_mutation_id": marker},
+    )
+
+
 def test_escape_tag_value_wildcards(valkey_db):
     """Wildcard characters in filter values must be escaped to prevent query injection."""
     assert "\\*" in valkey_db._escape_tag_value("*")

@@ -289,6 +289,32 @@ class ValkeyDB(VectorStoreBase):
         finally:
             self.client.delete(lock_key)
 
+    def _legacy_marker_rows(self, filters, top_k):
+        marker = filters.get(_MUTATION_MARKER_KEY)
+        if not marker:
+            return []
+
+        matches = []
+        for key in self.client.scan_iter(match=f"{self.prefix}:*", count=500):
+            values = self._convert_bytes(self.client.hgetall(key))
+            try:
+                metadata = json.loads(extract_json(values.get("metadata", "{}")))
+            except (AttributeError, json.JSONDecodeError, TypeError, UnicodeDecodeError):
+                continue
+            if not isinstance(metadata, dict) or metadata.get(_MUTATION_MARKER_KEY) != marker:
+                continue
+            if any(values.get(field) != value for field, value in filters.items() if field != _MUTATION_MARKER_KEY):
+                continue
+
+            self.client.hset(key, mapping={_MUTATION_MARKER_KEY: marker})
+            key_text = self._convert_bytes(key)
+            vector_id = values.get("memory_id", key_text.removeprefix(f"{self.prefix}:"))
+            payload, memory_id = self._process_document_fields(values, vector_id)
+            matches.append(OutputData(id=memory_id, score=0.0, payload=payload))
+            if top_k is not None and len(matches) >= top_k:
+                break
+        return matches
+
     def create_col(self, name=None, vector_size=None, distance=None):
         """
         Create a new collection (index) in Valkey.
@@ -835,6 +861,8 @@ class ValkeyDB(VectorStoreBase):
 
             # Use the existing search method which handles filters properly
             search_results = self.search("", dummy_vector, top_k=search_limit, filters=filters)
+            if not search_results and filters and filters.get(_MUTATION_MARKER_KEY):
+                search_results = self._legacy_marker_rows(filters, top_k)
 
             # Convert search results to list format (match Redis format)
             class MemoryResult:

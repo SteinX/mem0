@@ -34,6 +34,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 _MUTATION_MARKER_KEY = "_mem0_sidecar_mutation_id"
+_MUTATION_MARKER_FIELD = "mem0_sidecar_mutation_id"
 _MUTATION_MARKER_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -139,7 +140,7 @@ class AzureAISearch(VectorStoreBase):
             SimpleField(name="user_id", type=SearchFieldDataType.String, filterable=True),
             SimpleField(name="run_id", type=SearchFieldDataType.String, filterable=True),
             SimpleField(name="agent_id", type=SearchFieldDataType.String, filterable=True),
-            SimpleField(name=_MUTATION_MARKER_KEY, type=SearchFieldDataType.String, filterable=True),
+            SimpleField(name=_MUTATION_MARKER_FIELD, type=SearchFieldDataType.String, filterable=True),
             SearchField(
                 name="vector",
                 type=vector_type,
@@ -170,14 +171,14 @@ class AzureAISearch(VectorStoreBase):
         for field in ["user_id", "run_id", "agent_id"]:
             if field in payload:
                 document[field] = payload[field]
-        document[_MUTATION_MARKER_KEY] = payload.get(_MUTATION_MARKER_KEY, "")
+        document[_MUTATION_MARKER_FIELD] = payload.get(_MUTATION_MARKER_KEY, "")
         return document
 
     def _backfill_mutation_marker_field(self):
         documents = []
         results = self.search_client.search(
             search_text="*",
-            filter=f"{_MUTATION_MARKER_KEY} eq null",
+            filter=f"{_MUTATION_MARKER_FIELD} eq null",
             select=["id", "payload"],
         )
         for result in results:
@@ -189,7 +190,7 @@ class AzureAISearch(VectorStoreBase):
             documents.append(
                 {
                     "id": result["id"],
-                    _MUTATION_MARKER_KEY: (
+                    _MUTATION_MARKER_FIELD: (
                         marker
                         if isinstance(marker, str) and _MUTATION_MARKER_PATTERN.fullmatch(marker)
                         else ""
@@ -228,7 +229,7 @@ class AzureAISearch(VectorStoreBase):
     def _build_filter_expression(self, filters):
         filter_conditions = []
         for key, value in filters.items():
-            safe_key = self._sanitize_key(key)
+            safe_key = _MUTATION_MARKER_FIELD if key == _MUTATION_MARKER_KEY else self._sanitize_key(key)
             if isinstance(value, str):
                 safe_value = value.replace("'", "''")
                 condition = f"{safe_key} eq '{safe_value}'"
@@ -343,8 +344,9 @@ class AzureAISearch(VectorStoreBase):
         if payload is not None:
             json_payload = json.dumps(payload)
             document["payload"] = json_payload
-            for field in ["user_id", "run_id", "agent_id", _MUTATION_MARKER_KEY]:
+            for field in ["user_id", "run_id", "agent_id"]:
                 document[field] = payload.get(field)
+            document[_MUTATION_MARKER_FIELD] = payload.get(_MUTATION_MARKER_KEY)
         response = self.search_client.merge_or_upload_documents(documents=[document])
         for doc in response:
             if not hasattr(doc, "status_code") and doc.get("status_code") != 200:

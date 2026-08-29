@@ -6,6 +6,7 @@ overwriting the real embedding. The fix skips the embedding field entirely
 when vector is None.
 """
 
+import json
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
@@ -214,6 +215,34 @@ def test_backfill_indexes_mutation_marker_from_legacy_metadata():
     db.client.get.return_value = b"done"
     db._backfill_mutation_marker_tags()
     db.client.scan_iter.assert_not_called()
+
+
+def test_exact_marker_list_repairs_late_legacy_write():
+    db, mock_index = _make_redis_db()
+    marker = "d" * 64
+    db.client = MagicMock()
+    mock_index.search.return_value = MagicMock(docs=[])
+    db.client.scan_iter.return_value = [b"mem0:test:late"]
+    db.client.hgetall.return_value = {
+        b"memory_id": b"late",
+        b"hash": b"late-hash",
+        b"memory": b"late result",
+        b"created_at": b"0",
+        b"user_id": b"alice",
+        b"metadata": json.dumps({"_mem0_sidecar_mutation_id": marker}).encode(),
+    }
+
+    results = db.list(
+        filters={"user_id": "alice", "_mem0_sidecar_mutation_id": marker},
+        top_k=1000,
+    )
+
+    assert results[0][0].id == "late"
+    assert results[0][0].payload["_mem0_sidecar_mutation_id"] == marker
+    db.client.hset.assert_called_once_with(
+        b"mem0:test:late",
+        mapping={"_mem0_sidecar_mutation_id": marker},
+    )
 
 
 def test_create_col_keeps_distinct_dims_across_instances():
