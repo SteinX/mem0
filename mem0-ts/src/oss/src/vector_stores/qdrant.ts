@@ -336,7 +336,7 @@ export class Qdrant implements VectorStore {
           return String(error);
         }
       })();
-      if (!/inference/i.test(details)) {
+      if (!/InferenceService is not initialized/i.test(details)) {
         throw error;
       }
       this._hasBm25Slot = false;
