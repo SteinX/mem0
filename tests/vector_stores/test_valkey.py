@@ -21,6 +21,7 @@ def mock_valkey_client():
         mock_client.return_value.hset = MagicMock()
         mock_client.return_value.hgetall = MagicMock()
         mock_client.return_value.delete = MagicMock()
+        mock_client.return_value.get.return_value = "done"
         yield mock_client.return_value
 
 
@@ -898,6 +899,7 @@ def mock_valkey_cluster_client():
         mock_client.hset = MagicMock()
         mock_client.hgetall = MagicMock()
         mock_client.delete = MagicMock()
+        mock_client.get.return_value = "done"
         mock_from_url.return_value = mock_client
         yield mock_client
 

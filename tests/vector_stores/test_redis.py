@@ -21,7 +21,7 @@ def _make_redis_db():
     db = RedisDB.__new__(RedisDB)
     mock_index = MagicMock()
     db.index = mock_index
-    db.schema = {"index": {"prefix": "mem0:test"}}
+    db.schema = {"index": {"name": "test", "prefix": "mem0:test"}}
     return db, mock_index
 
 

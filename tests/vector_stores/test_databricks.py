@@ -221,6 +221,7 @@ def test_search_delta_sync_text(db_instance_delta, mock_workspace_client):
         '{"topic":"greeting"}',
         "2024-01-01T00:00:00",
         "2024-01-01T00:00:00",
+        None,
         0.42,
     ]
     mock_workspace_client.vector_search_indexes.query_index.return_value = SimpleNamespace(
@@ -246,6 +247,7 @@ def test_search_direct_access_vector(db_instance_direct, mock_workspace_client):
         "2024-01-02T00:00:00",
         "2024-01-02T00:00:00",
         [0.1, 0.2, 0.3, 0.4],
+        None,
         0.77,
     ]
     mock_workspace_client.vector_search_indexes.query_index.return_value = SimpleNamespace(

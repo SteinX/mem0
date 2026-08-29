@@ -67,6 +67,8 @@ def azure_ai_search_instance(mock_clients):
         compression_type="binary",  # testing binary quantization option
         use_float16=True,
     )
+    mock_search_client.search.reset_mock()
+    mock_search_client.merge_or_upload_documents.reset_mock()
     # Return instance and clients for verification.
     return instance, mock_search_client, mock_index_client
 
@@ -281,7 +283,7 @@ def test_create_col(azure_ai_search_instance):
 
     # Check basic properties
     assert index.name == "test-index"
-    assert len(index.fields) == 6  # id, user_id, run_id, agent_id, vector, payload
+    assert len(index.fields) == 7
 
     # Check that required fields are present
     field_names = [f.name for f in index.fields]
@@ -291,6 +293,7 @@ def test_create_col(azure_ai_search_instance):
     assert "user_id" in field_names
     assert "run_id" in field_names
     assert "agent_id" in field_names
+    assert "_mem0_sidecar_mutation_id" in field_names
 
     # Check that id is the key field
     id_field = next(f for f in index.fields if f.name == "id")
@@ -521,7 +524,16 @@ def test_update_allows_empty_payload(azure_ai_search_instance):
     instance.update("doc1", payload={})
 
     mock_search_client.merge_or_upload_documents.assert_called_once_with(
-        documents=[{"id": "doc1", "payload": "{}", "user_id": None, "run_id": None, "agent_id": None}]
+        documents=[
+            {
+                "id": "doc1",
+                "payload": "{}",
+                "user_id": None,
+                "run_id": None,
+                "agent_id": None,
+                "_mem0_sidecar_mutation_id": None,
+            }
+        ]
     )
 
 
