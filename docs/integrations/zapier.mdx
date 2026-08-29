@@ -103,7 +103,7 @@ Extraction runs asynchronously, so **Add Memory** returns an event ID and moves 
 | Field | Required | Purpose |
 | --- | --- | --- |
 | **Query** | Yes | Natural-language search text |
-| **User ID** | Yes | Whose memories to search. The API needs an entity filter |
+| **User ID** | | Whose memories to search |
 | **Agent ID** | | Also recall facts attributed to this agent speaker |
 | **App ID** | | Require results to belong to this app or tenant |
 | **Run ID** | | Require results to belong to this session or run |
@@ -113,7 +113,7 @@ Extraction runs asynchronously, so **Add Memory** returns an event ID and moves 
 
 | Field | Required | Purpose |
 | --- | --- | --- |
-| **User ID** | Yes | Whose memories to list |
+| **User ID** | | Whose memories to list |
 | **Agent ID** | | Also list facts attributed to this agent speaker |
 | **App ID** | | Require results to belong to this app or tenant |
 | **Run ID** | | Require results to belong to this session or run |
@@ -123,6 +123,8 @@ Extraction runs asynchronously, so **Add Memory** returns an event ID and moves 
 Returns one page per run. Raise **Page** to walk through larger result sets.
 
 When both **User ID** and **Agent ID** are supplied, Mem0 recalls either speaker because default extraction stores each fact under the speaker that stated it. **App ID** and **Run ID** stay outside that speaker OR as mandatory boundaries. Use a tenant-specific App ID when different users share the same agent.
+
+For Add, Search, and Get Memories, supply at least one of **User ID**, **Agent ID**, **App ID**, or **Run ID**. Each field is individually optional so app-only, run-only, and agent-only workflows remain valid.
 
 ### Delete Memory
 

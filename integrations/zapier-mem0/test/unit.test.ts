@@ -122,9 +122,16 @@ describe('add_memory (offline)', () => {
 	it('forwards app_id as a tenant boundary on add', async () => {
 		const z = makeZ([{ data: { event_id: 'e1', status: 'PENDING' } }]);
 		await addMemory.operation.perform(z, {
-			inputData: { content: 'hi', user_id: 'u1', agent_id: 'a1', app_id: 'tenant-1' },
+			inputData: { content: 'hi', app_id: 'tenant-1' },
 		} as any);
 		expect(z.requests[0].body.app_id).toBe('tenant-1');
+	});
+
+	it('rejects add without an entity scope', async () => {
+		const z = makeZ();
+		await expect(
+			addMemory.operation.perform(z, { inputData: { content: 'hi' } } as any),
+		).rejects.toThrow('Provide at least one of User ID, Agent ID, App ID, or Run ID.');
 	});
 });
 
@@ -136,6 +143,14 @@ describe('search / get array-shape enforcement (offline)', () => {
 		} as any);
 		expect(Array.isArray(res)).toBe(true);
 		expect(res).toHaveLength(1);
+	});
+
+	it('search accepts an app-only tenant scope', async () => {
+		const z = makeZ([{ data: { results: [] } }]);
+		await searchMemories.operation.perform(z, {
+			inputData: { query: 'x', app_id: 'tenant-1' },
+		} as unknown as Bundle);
+		expect(z.requests[0].body.filters).toEqual({ app_id: 'tenant-1' });
 	});
 
 	it('search ORs user and agent speaker scopes', async () => {
@@ -174,6 +189,24 @@ describe('search / get array-shape enforcement (offline)', () => {
 				{ run_id: 'r1' },
 			],
 		});
+	});
+
+	it('get_memories accepts a run-only scope', async () => {
+		const z = makeZ([{ data: { results: [] } }]);
+		await getMemories.operation.perform(z, {
+			inputData: { run_id: 'r1' },
+		} as unknown as Bundle);
+		expect(z.requests[0].body.filters).toEqual({ run_id: 'r1' });
+	});
+
+	it.each([
+		['search', searchMemories, { query: 'x' }],
+		['get_memories', getMemories, {}],
+	])('%s rejects an empty entity scope', async (_name, action, inputData) => {
+		const z = makeZ();
+		await expect(action.operation.perform(z, { inputData } as any)).rejects.toThrow(
+			'Provide at least one of User ID, Agent ID, App ID, or Run ID.',
+		);
 	});
 
 	it('get_memories returns [] when the API returns neither array nor results', async () => {

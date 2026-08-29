@@ -33,6 +33,13 @@ const perform = async (z: ZObject, bundle: Bundle): Promise<AddResponse | EventR
 	const infer = String(bundle.inputData.infer) !== 'false';
 	// Waiting is opt-in (the poll path can exceed Zapier's step timeout).
 	const wait = String(bundle.inputData.waitForCompletion) === 'true';
+	if (![bundle.inputData.user_id, bundle.inputData.agent_id, bundle.inputData.app_id, bundle.inputData.run_id].some(Boolean)) {
+		throw new z.errors.Error(
+			'Provide at least one of User ID, Agent ID, App ID, or Run ID.',
+			'InvalidInput',
+			400,
+		);
+	}
 
 	const body: Record<string, unknown> = {
 		messages: [{ role: bundle.inputData.role || 'user', content: bundle.inputData.content }],
@@ -115,7 +122,7 @@ export default {
 				choices: { user: 'User', assistant: 'Assistant', system: 'System' },
 				default: 'user',
 			},
-			{ key: 'user_id', label: 'User ID', type: 'string', required: true, helpText: 'Scope this memory to a user. Mem0 requires at least one entity ID.' },
+			{ key: 'user_id', label: 'User ID', type: 'string', helpText: 'Scope this memory to a user. Mem0 requires at least one entity ID across these four fields.' },
 			{ key: 'agent_id', label: 'Agent ID', type: 'string' },
 			{ key: 'app_id', label: 'App ID', type: 'string' },
 			{ key: 'run_id', label: 'Run ID', type: 'string' },
