@@ -40,7 +40,7 @@ Two independent controls:
 
 Both take **User ID**, **Agent ID**, **App ID**, and **Run ID**, and at least one is required — the API rejects a query with no entity scope, and the node fails with a clear message before calling it.
 
-Supplying several combines them with **OR**, giving the union of those scopes. Mem0 indexes each entity separately, so an `AND` across `user_id` and `agent_id` matches nothing even for a memory written with both. To narrow instead of widen, run one operation per entity id.
+Supplying several combines them with **AND**, so every returned memory must match every provided entity ID. This keeps **User ID** as a tenant boundary when an agent or run is shared across users. To query the union of separate scopes, run one operation per entity ID and combine the results explicitly.
 
 ## Credentials
 
