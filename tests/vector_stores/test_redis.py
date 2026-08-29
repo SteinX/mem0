@@ -149,6 +149,62 @@ def test_insert_and_update_copy_mutation_marker_to_indexed_field():
     assert updated["_mem0_sidecar_mutation_id"] == marker
 
 
+def test_backfill_indexes_mutation_marker_from_legacy_metadata():
+    class RedisDocument:
+        def __init__(self, **values):
+            self.__dict__.update(values)
+
+        def __getitem__(self, key):
+            return self.__dict__[key]
+
+    db, mock_index = _make_redis_db()
+    db.client = MagicMock()
+    db.client.scan_iter.return_value = [
+        b"mem0:test:legacy",
+        b"mem0:test:invalid",
+    ]
+    marker = "c" * 64
+    db.client.hget.side_effect = [
+        ('{"_mem0_sidecar_mutation_id":"' + marker + '","category":"legacy"}').encode(),
+        b'{"_mem0_sidecar_mutation_id":"not-a-marker"}',
+    ]
+
+    db._backfill_mutation_marker_tags()
+
+    db.client.scan_iter.assert_called_once_with(match="mem0:test:*", count=500)
+    db.client.hset.assert_called_once_with(
+        b"mem0:test:legacy",
+        mapping={"_mem0_sidecar_mutation_id": marker},
+    )
+
+    mock_index.search.return_value = MagicMock(
+        docs=[
+            RedisDocument(
+                memory_id="legacy",
+                hash="legacy-hash",
+                memory="late result",
+                created_at="0",
+                user_id="alice",
+                metadata=(
+                    '{"_mem0_sidecar_mutation_id":"'
+                    + marker
+                    + '","category":"legacy"}'
+                ),
+            )
+        ]
+    )
+    results = db.list(
+        filters={
+            "user_id": "alice",
+            "_mem0_sidecar_mutation_id": marker,
+        },
+        top_k=1000,
+    )
+    assert results[0][0].id == "legacy"
+    assert results[0][0].payload["_mem0_sidecar_mutation_id"] == marker
+    assert "@_mem0_sidecar_mutation_id" in mock_index.search.call_args.args[0].query_string()
+
+
 def test_create_col_keeps_distinct_dims_across_instances():
     """Building the schema for two collections with different embedding
     dimensions must keep them distinct. Regression: DEFAULT_FIELDS.copy() is a

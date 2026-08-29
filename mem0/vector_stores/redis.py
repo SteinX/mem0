@@ -1,6 +1,7 @@
 import copy
 import json
 import logging
+import re
 from datetime import datetime, timezone
 from functools import reduce
 
@@ -16,6 +17,9 @@ from mem0.vector_stores.base import VectorStoreBase
 
 logger = logging.getLogger(__name__)
 
+_MUTATION_MARKER_KEY = "_mem0_sidecar_mutation_id"
+_MUTATION_MARKER_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+
 # TODO: Improve as these are not the best fields for the Redis's perspective. Might do away with them.
 DEFAULT_FIELDS = [
     {"name": "memory_id", "type": "tag"},
@@ -23,7 +27,7 @@ DEFAULT_FIELDS = [
     {"name": "agent_id", "type": "tag"},
     {"name": "run_id", "type": "tag"},
     {"name": "user_id", "type": "tag"},
-    {"name": "_mem0_sidecar_mutation_id", "type": "tag"},
+    {"name": _MUTATION_MARKER_KEY, "type": "tag"},
     {"name": "memory", "type": "text"},
     {"name": "metadata", "type": "text"},
     # TODO: Although it is numeric but also accepts string
@@ -76,6 +80,27 @@ class RedisDB(VectorStoreBase):
         self.index = SearchIndex.from_dict(self.schema)
         self.index.set_client(self.client)
         self.index.create(overwrite=True)
+        self._backfill_mutation_marker_tags()
+
+    def _backfill_mutation_marker_tags(self):
+        prefix = self.schema["index"]["prefix"]
+        for key in self.client.scan_iter(match=f"{prefix}:*", count=500):
+            raw_metadata = self.client.hget(key, "metadata")
+            if raw_metadata is None:
+                continue
+            try:
+                if isinstance(raw_metadata, bytes):
+                    raw_metadata = raw_metadata.decode("utf-8")
+                metadata = json.loads(extract_json(raw_metadata))
+            except (AttributeError, json.JSONDecodeError, TypeError, UnicodeDecodeError):
+                logger.warning("Skipping invalid Redis metadata while backfilling mutation markers for key %r", key)
+                continue
+
+            if not isinstance(metadata, dict):
+                continue
+            marker = metadata.get(_MUTATION_MARKER_KEY)
+            if isinstance(marker, str) and _MUTATION_MARKER_PATTERN.fullmatch(marker):
+                self.client.hset(key, mapping={_MUTATION_MARKER_KEY: marker})
 
     def create_col(self, name=None, vector_size=None, distance=None):
         """
@@ -136,7 +161,7 @@ class RedisDB(VectorStoreBase):
             }
 
             # Conditionally add optional fields
-            for field in ["agent_id", "run_id", "user_id", "_mem0_sidecar_mutation_id"]:
+            for field in ["agent_id", "run_id", "user_id", _MUTATION_MARKER_KEY]:
                 if field in payload:
                     entry[field] = payload[field]
 
@@ -263,7 +288,7 @@ class RedisDB(VectorStoreBase):
         if vector is not None:
             data["embedding"] = np.array(vector, dtype=np.float32).tobytes()
 
-        for field in ["agent_id", "run_id", "user_id", "_mem0_sidecar_mutation_id"]:
+        for field in ["agent_id", "run_id", "user_id", _MUTATION_MARKER_KEY]:
             if field in payload:
                 data[field] = payload[field]
 
