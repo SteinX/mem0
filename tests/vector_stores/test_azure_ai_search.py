@@ -32,6 +32,7 @@ def mock_clients():
         mock_search_client.upload_documents = Mock()
         mock_search_client.upload_documents.return_value = [{"status": True, "id": "doc1"}]
         mock_search_client.search = Mock()
+        mock_search_client.search.return_value = []
         mock_search_client.delete_documents = Mock()
         mock_search_client.delete_documents.return_value = [{"status": True, "id": "doc1"}]
         mock_search_client.merge_or_upload_documents = Mock()
@@ -66,6 +67,8 @@ def azure_ai_search_instance(mock_clients):
         compression_type="binary",  # testing binary quantization option
         use_float16=True,
     )
+    mock_search_client.search.reset_mock()
+    mock_search_client.merge_or_upload_documents.reset_mock()
     # Return instance and clients for verification.
     return instance, mock_search_client, mock_index_client
 
@@ -280,7 +283,7 @@ def test_create_col(azure_ai_search_instance):
 
     # Check basic properties
     assert index.name == "test-index"
-    assert len(index.fields) == 6  # id, user_id, run_id, agent_id, vector, payload
+    assert len(index.fields) == 7
 
     # Check that required fields are present
     field_names = [f.name for f in index.fields]
@@ -290,6 +293,7 @@ def test_create_col(azure_ai_search_instance):
     assert "user_id" in field_names
     assert "run_id" in field_names
     assert "agent_id" in field_names
+    assert "mem0_sidecar_mutation_id" in field_names
 
     # Check that id is the key field
     id_field = next(f for f in index.fields if f.name == "id")
@@ -520,7 +524,16 @@ def test_update_allows_empty_payload(azure_ai_search_instance):
     instance.update("doc1", payload={})
 
     mock_search_client.merge_or_upload_documents.assert_called_once_with(
-        documents=[{"id": "doc1", "payload": "{}", "user_id": None, "run_id": None, "agent_id": None}]
+        documents=[
+            {
+                "id": "doc1",
+                "payload": "{}",
+                "user_id": None,
+                "run_id": None,
+                "agent_id": None,
+                "mem0_sidecar_mutation_id": None,
+            }
+        ]
     )
 
 
@@ -658,8 +671,7 @@ def test_init_sets_compression_type_to_none_if_unspecified(mock_clients):
     assert instance.compression_type == "none"
 
 
-def test_init_does_not_create_col_if_collection_exists(mock_clients):
-    """Test __init__ does not call create_col if collection already exists."""
+def test_init_updates_schema_if_collection_exists(mock_clients):
     mock_search_client, mock_index_client, _ = mock_clients
     # Simulate collection already exists
     mock_index_client.list_index_names.return_value = ["test-index"]
@@ -670,8 +682,7 @@ def test_init_does_not_create_col_if_collection_exists(mock_clients):
         api_key="test-api-key",
         embedding_model_dims=16,
     )
-    # create_or_update_index should not be called since collection exists
-    mock_index_client.create_or_update_index.assert_not_called()
+    mock_index_client.create_or_update_index.assert_called_once()
 
 
 def test_init_calls_create_col_if_collection_missing(mock_clients):
@@ -687,6 +698,78 @@ def test_init_calls_create_col_if_collection_missing(mock_clients):
         embedding_model_dims=16,
     )
     mock_index_client.create_or_update_index.assert_called_once()
+
+
+def test_mutation_marker_is_filterable_persisted_and_backfilled(azure_ai_search_instance):
+    instance, search_client, index_client = azure_ai_search_instance
+    marker = "a" * 64
+    index = index_client.create_or_update_index.call_args.args[0]
+    marker_field = next(field for field in index.fields if field.name == "mem0_sidecar_mutation_id")
+    assert marker_field.filterable is True
+
+    document = instance._generate_document(
+        [0.1, 0.2, 0.3],
+        {"data": "memory", "_mem0_sidecar_mutation_id": marker},
+        "memory-1",
+    )
+    assert document["mem0_sidecar_mutation_id"] == marker
+
+    search_client.search.return_value = [
+        {
+            "id": "legacy",
+            "payload": json.dumps({"_mem0_sidecar_mutation_id": marker}),
+        }
+    ]
+    search_client.merge_or_upload_documents.reset_mock()
+    instance._backfill_mutation_marker_field()
+    search_client.merge_or_upload_documents.assert_called_once_with(
+        documents=[{"id": "legacy", "mem0_sidecar_mutation_id": marker}]
+    )
+    assert instance._build_filter_expression({"_mem0_sidecar_mutation_id": marker}) == (
+        f"mem0_sidecar_mutation_id eq '{marker}'"
+    )
+
+
+def test_exact_marker_list_repairs_late_legacy_payload_write(azure_ai_search_instance):
+    instance, search_client, _ = azure_ai_search_instance
+    marker = "a" * 64
+    search_client.search.side_effect = [
+        [],
+        [
+            {
+                "id": "memory-1",
+                "payload": json.dumps({
+                    "user_id": "alice",
+                    "_mem0_sidecar_mutation_id": marker,
+                }),
+                "@search.score": 1.0,
+            },
+            {
+                "id": "wrong-marker",
+                "payload": json.dumps({
+                    "user_id": "alice",
+                    "_mem0_sidecar_mutation_id": "b" * 64,
+                }),
+                "@search.score": 0.5,
+            },
+        ],
+    ]
+    search_client.merge_or_upload_documents.reset_mock()
+
+    [results] = instance.list(
+        filters={"user_id": "alice", "_mem0_sidecar_mutation_id": marker},
+        top_k=1000,
+    )
+
+    assert [result.id for result in results] == ["memory-1"]
+    fallback = search_client.search.call_args_list[1].kwargs
+    assert fallback["search_text"] == marker
+    assert fallback["search_fields"] == ["payload"]
+    assert fallback["filter"] == "user_id eq 'alice'"
+    assert fallback["top"] == 1000
+    search_client.merge_or_upload_documents.assert_called_once_with(
+        documents=[{"id": "memory-1", "mem0_sidecar_mutation_id": marker}]
+    )
 
 
 def test_build_filter_rejects_dict_value(azure_ai_search_instance):

@@ -1,6 +1,7 @@
 import copy
 import json
 import logging
+import re
 from datetime import datetime, timezone
 from functools import reduce
 
@@ -16,6 +17,10 @@ from mem0.vector_stores.base import VectorStoreBase
 
 logger = logging.getLogger(__name__)
 
+_MUTATION_MARKER_KEY = "_mem0_sidecar_mutation_id"
+_MUTATION_MARKER_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+_MUTATION_MARKER_MIGRATION = "mutation-marker-tag-v1"
+
 # TODO: Improve as these are not the best fields for the Redis's perspective. Might do away with them.
 DEFAULT_FIELDS = [
     {"name": "memory_id", "type": "tag"},
@@ -23,6 +28,7 @@ DEFAULT_FIELDS = [
     {"name": "agent_id", "type": "tag"},
     {"name": "run_id", "type": "tag"},
     {"name": "user_id", "type": "tag"},
+    {"name": _MUTATION_MARKER_KEY, "type": "tag"},
     {"name": "memory", "type": "text"},
     {"name": "metadata", "type": "text"},
     # TODO: Although it is numeric but also accepts string
@@ -75,6 +81,87 @@ class RedisDB(VectorStoreBase):
         self.index = SearchIndex.from_dict(self.schema)
         self.index.set_client(self.client)
         self.index.create(overwrite=True)
+        self._backfill_mutation_marker_tags()
+
+    def _backfill_mutation_marker_tags(self):
+        collection_name = self.schema["index"]["name"]
+        state_key = f"mem0:migrations:{collection_name}:{_MUTATION_MARKER_MIGRATION}"
+        lock_key = f"{state_key}:lock"
+        if self.client.get(state_key) in {b"done", "done"}:
+            return
+        if not self.client.set(lock_key, "1", nx=True, ex=900):
+            return
+
+        prefix = self.schema["index"]["prefix"]
+        try:
+            for key in self.client.scan_iter(match=f"{prefix}:*", count=500):
+                raw_metadata = self.client.hget(key, "metadata")
+                if raw_metadata is None:
+                    continue
+                try:
+                    if isinstance(raw_metadata, bytes):
+                        raw_metadata = raw_metadata.decode("utf-8")
+                    metadata = json.loads(extract_json(raw_metadata))
+                except (AttributeError, json.JSONDecodeError, TypeError, UnicodeDecodeError):
+                    logger.warning("Skipping invalid Redis metadata while backfilling mutation markers for key %r", key)
+                    continue
+
+                if not isinstance(metadata, dict):
+                    continue
+                marker = metadata.get(_MUTATION_MARKER_KEY)
+                if isinstance(marker, str) and _MUTATION_MARKER_PATTERN.fullmatch(marker):
+                    self.client.hset(key, mapping={_MUTATION_MARKER_KEY: marker})
+            self.client.set(state_key, "done")
+        finally:
+            self.client.delete(lock_key)
+
+    def _legacy_marker_rows(self, filters, top_k):
+        marker = filters.get(_MUTATION_MARKER_KEY)
+        if not isinstance(marker, str) or not _MUTATION_MARKER_PATTERN.fullmatch(marker):
+            return []
+
+        prefix = self.schema["index"]["prefix"]
+        conditions = [
+            str(Tag(field) == value)
+            for field, value in filters.items()
+            if field != _MUTATION_MARKER_KEY and value is not None
+        ]
+        conditions.append(f'@metadata:"{marker}"')
+        query = Query(" ".join(conditions)).sort_by("created_at", asc=False)
+        query = query.paging(0, top_k if top_k is not None else 1000)
+
+        matches = []
+        for result in self.index.search(query).docs:
+            try:
+                metadata = json.loads(extract_json(result["metadata"]))
+            except (AttributeError, json.JSONDecodeError, TypeError, UnicodeDecodeError):
+                continue
+            if not isinstance(metadata, dict) or metadata.get(_MUTATION_MARKER_KEY) != marker:
+                continue
+            if any(
+                result[field] != value
+                for field, value in filters.items()
+                if field != _MUTATION_MARKER_KEY and value is not None
+            ):
+                continue
+
+            memory_id = result["memory_id"]
+            self.client.hset(f"{prefix}:{memory_id}", mapping={_MUTATION_MARKER_KEY: marker})
+            payload = {
+                "hash": result["hash"],
+                "data": result["memory"],
+                "created_at": datetime.fromtimestamp(int(result["created_at"]), tz=timezone.utc).isoformat(
+                    timespec="microseconds"
+                ),
+                **{field: result[field] for field in ["agent_id", "run_id", "user_id"] if field in result.__dict__},
+                **metadata,
+            }
+            if result.__dict__.get("updated_at"):
+                payload["updated_at"] = datetime.fromtimestamp(int(result["updated_at"]), tz=timezone.utc).isoformat(
+                    timespec="microseconds"
+                )
+            matches.append(MemoryResult(id=memory_id, payload=payload))
+        return matches
 
     def create_col(self, name=None, vector_size=None, distance=None):
         """
@@ -135,7 +222,7 @@ class RedisDB(VectorStoreBase):
             }
 
             # Conditionally add optional fields
-            for field in ["agent_id", "run_id", "user_id"]:
+            for field in ["agent_id", "run_id", "user_id", _MUTATION_MARKER_KEY]:
                 if field in payload:
                     entry[field] = payload[field]
 
@@ -262,7 +349,7 @@ class RedisDB(VectorStoreBase):
         if vector is not None:
             data["embedding"] = np.array(vector, dtype=np.float32).tobytes()
 
-        for field in ["agent_id", "run_id", "user_id"]:
+        for field in ["agent_id", "run_id", "user_id", _MUTATION_MARKER_KEY]:
             if field in payload:
                 data[field] = payload[field]
 
@@ -335,33 +422,30 @@ class RedisDB(VectorStoreBase):
             query = query.paging(0, top_k)
 
         results = self.index.search(query)
-        return [
-            [
-                MemoryResult(
-                    id=result["memory_id"],
-                    payload={
-                        "hash": result["hash"],
-                        "data": result["memory"],
-                        "created_at": datetime.fromtimestamp(
-                            int(result["created_at"]), tz=timezone.utc
-                        ).isoformat(timespec="microseconds"),
-                        **(
-                            {
-                                "updated_at": datetime.fromtimestamp(
-                                    int(result["updated_at"]), tz=timezone.utc
-                                ).isoformat(timespec="microseconds")
-                            }
-                            if result.__dict__.get("updated_at")
-                            else {}
-                        ),
-                        **{
-                            field: result[field]
-                            for field in ["agent_id", "run_id", "user_id"]
-                            if field in result.__dict__
-                        },
-                        **{k: v for k, v in json.loads(extract_json(result["metadata"])).items()},
-                    },
-                )
-                for result in results.docs
-            ]
+        memory_results = [
+            MemoryResult(
+                id=result["memory_id"],
+                payload={
+                    "hash": result["hash"],
+                    "data": result["memory"],
+                    "created_at": datetime.fromtimestamp(int(result["created_at"]), tz=timezone.utc).isoformat(
+                        timespec="microseconds"
+                    ),
+                    **(
+                        {
+                            "updated_at": datetime.fromtimestamp(int(result["updated_at"]), tz=timezone.utc).isoformat(
+                                timespec="microseconds"
+                            )
+                        }
+                        if result.__dict__.get("updated_at")
+                        else {}
+                    ),
+                    **{field: result[field] for field in ["agent_id", "run_id", "user_id"] if field in result.__dict__},
+                    **{k: v for k, v in json.loads(extract_json(result["metadata"])).items()},
+                },
+            )
+            for result in results.docs
         ]
+        if not memory_results and filters and filters.get(_MUTATION_MARKER_KEY):
+            memory_results = self._legacy_marker_rows(filters, top_k)
+        return [memory_results]

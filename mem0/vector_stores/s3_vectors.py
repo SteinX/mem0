@@ -14,6 +14,8 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+_MUTATION_MARKER_KEY = "_mem0_sidecar_mutation_id"
+
 
 class OutputData(BaseModel):
     id: Optional[str]
@@ -181,7 +183,30 @@ class S3Vectors(VectorStoreBase):
         response = self.client.get_index(vectorBucketName=self.vector_bucket_name, indexName=self.collection_name)
         return response.get("index", {})
 
+    def _list_by_metadata_filter(self, filters: Dict, top_k: Optional[int]) -> List[OutputData]:
+        limit = 100 if top_k is None else top_k
+        if limit == 0:
+            return []
+        marker_probe_vector = [0.0] * self.embedding_model_dims
+        marker_probe_vector[0] = 1.0
+        paginator = self.client.get_paginator("query_vectors")
+        pages = paginator.paginate(
+            vectorBucketName=self.vector_bucket_name,
+            indexName=self.collection_name,
+            queryVector={"float32": marker_probe_vector},
+            topK=limit,
+            filter=filters,
+            returnMetadata=True,
+            returnDistance=False,
+        )
+        vectors = []
+        for page in pages:
+            vectors.extend(page.get("vectors", []))
+        return self._parse_output(vectors)[:limit]
+
     def list(self, filters=None, top_k=None):
+        if filters and _MUTATION_MARKER_KEY in filters:
+            return [self._list_by_metadata_filter(filters, top_k)]
         params = {
             "vectorBucketName": self.vector_bucket_name,
             "indexName": self.collection_name,

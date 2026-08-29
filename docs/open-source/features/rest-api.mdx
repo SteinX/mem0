@@ -305,6 +305,31 @@ The OSS REST server exposes the following endpoints. None use the `/v1/` prefix.
 | `POST` | `/search` | Search memories |
 | `POST` | `/reset` | Reset all memories |
 
+#### Sidecar mutation recovery lookup
+
+The self-hosted sidecar uses the private `_mem0_sidecar_mutation_id` query
+parameter on `GET /memories` to reconcile an add whose HTTP result was
+ambiguous. The value must be a lowercase 64-character hexadecimal marker. Add
+at least one `user_id`, `agent_id`, or `run_id` filter whenever possible; the
+server normalizes those identifiers and requires every returned memory to
+match both the entity scope and marker exactly.
+
+This lookup returns the raw `{"results": [...]}` list used for reconciliation,
+including marker metadata needed by the sidecar. It does not change normal
+entity-only `GET /memories` behavior. Authenticated callers can use a scoped
+lookup. Omitting all entity filters makes it a store-wide inventory operation,
+which rejects named client API keys and requires an admin session or legacy
+operator credential.
+
+```bash
+curl -G http://localhost:8888/memories \
+  -H "X-API-Key: $ADMIN_API_KEY" \
+  --data-urlencode "user_id=alice" \
+  --data-urlencode "_mem0_sidecar_mutation_id=<64-lowercase-hex>" \
+  --data-urlencode "top_k=1000" \
+  --data-urlencode "show_expired=true"
+```
+
 ### Authentication
 
 | Method | Path | Description |

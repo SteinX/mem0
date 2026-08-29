@@ -1,5 +1,6 @@
 import json
 from datetime import datetime
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -21,6 +22,7 @@ def mock_valkey_client():
         mock_client.return_value.hset = MagicMock()
         mock_client.return_value.hgetall = MagicMock()
         mock_client.return_value.delete = MagicMock()
+        mock_client.return_value.get.return_value = "done"
         yield mock_client.return_value
 
 
@@ -898,6 +900,7 @@ def mock_valkey_cluster_client():
         mock_client.hset = MagicMock()
         mock_client.hgetall = MagicMock()
         mock_client.delete = MagicMock()
+        mock_client.get.return_value = "done"
         mock_from_url.return_value = mock_client
         yield mock_client
 
@@ -1041,6 +1044,87 @@ def test_build_index_schema_indexes_memory_as_text(valkey_db):
     )
     # And it must not be declared as TAG.
     assert ["memory", "TAG"] != cmd[memory_idx : memory_idx + 2]
+
+
+def test_mutation_marker_schema_write_and_legacy_backfill(valkey_db, mock_valkey_client):
+    marker = "a" * 64
+    cmd = valkey_db._build_index_schema(
+        collection_name="test_collection",
+        embedding_dims=1536,
+        distance_metric="COSINE",
+        prefix="mem0:test_collection",
+    )
+    marker_idx = cmd.index("_mem0_sidecar_mutation_id")
+    assert cmd[marker_idx + 1] == "TAG"
+
+    valkey_db.insert(
+        vectors=[[0.1] * 1536],
+        payloads=[{"data": "memory", "_mem0_sidecar_mutation_id": marker}],
+        ids=["memory-1"],
+    )
+    assert mock_valkey_client.hset.call_args.kwargs["mapping"]["_mem0_sidecar_mutation_id"] == marker
+
+    mock_valkey_client.reset_mock()
+    mock_valkey_client.get.return_value = None
+    mock_valkey_client.set.return_value = True
+    mock_valkey_client.scan_iter.return_value = [b"mem0:test_collection:legacy"]
+    mock_valkey_client.hgetall.return_value = {
+        b"metadata": json.dumps({"_mem0_sidecar_mutation_id": marker}).encode()
+    }
+    valkey_db._backfill_mutation_marker_tags()
+    mock_valkey_client.hset.assert_called_once_with(
+        b"mem0:test_collection:legacy",
+        mapping={"_mem0_sidecar_mutation_id": marker},
+    )
+
+
+def test_exact_marker_list_repairs_late_legacy_write(valkey_db, mock_valkey_client):
+    marker = "b" * 64
+    mock_valkey_client.reset_mock()
+    legacy_doc = SimpleNamespace(
+        memory_id="late",
+        hash="late-hash",
+        memory="late result",
+        created_at="0",
+        user_id="alice",
+        metadata=json.dumps({"_mem0_sidecar_mutation_id": marker}),
+    )
+    mock_valkey_client.ft.return_value.search.side_effect = [
+        MagicMock(docs=[]),
+        MagicMock(docs=[legacy_doc]),
+    ]
+
+    results = valkey_db.list(
+        filters={"user_id": "alice", "_mem0_sidecar_mutation_id": marker},
+        top_k=1000,
+    )
+
+    assert results[0][0].id == "late"
+    assert results[0][0].payload["_mem0_sidecar_mutation_id"] == marker
+    fallback_query = mock_valkey_client.ft.return_value.search.call_args_list[1].args[0].query_string()
+    assert "@user_id:{alice}" in fallback_query
+    assert "@metadata:{" in fallback_query
+    assert f'\\"_mem0_sidecar_mutation_id\\"\\:\\ \\"{marker}\\"' in fallback_query
+    assert " | " in fallback_query
+    mock_valkey_client.scan_iter.assert_not_called()
+    mock_valkey_client.hset.assert_called_once_with(
+        "mem0:test_collection:late",
+        mapping={"_mem0_sidecar_mutation_id": marker},
+    )
+
+
+def test_exact_marker_list_does_not_scan_when_marker_is_absent(valkey_db, mock_valkey_client):
+    mock_valkey_client.reset_mock()
+    mock_valkey_client.ft.return_value.search.side_effect = [MagicMock(docs=[]), MagicMock(docs=[])]
+
+    assert valkey_db.list(
+        filters={"user_id": "alice", "_mem0_sidecar_mutation_id": "c" * 64},
+        top_k=1000,
+    ) == [[]]
+
+    assert mock_valkey_client.ft.return_value.search.call_count == 2
+    mock_valkey_client.scan_iter.assert_not_called()
+    mock_valkey_client.hset.assert_not_called()
 
 
 def test_escape_tag_value_wildcards(valkey_db):

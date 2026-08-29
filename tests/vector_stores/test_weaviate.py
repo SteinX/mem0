@@ -182,6 +182,35 @@ class TestWeaviateDB(unittest.TestCase):
         self.assertEqual(results[0][1].id, "id2")
         self.assertEqual(results[0][1].payload["key2"], "value2")
 
+    def test_list_filters_and_returns_sidecar_marker_metadata(self):
+        marker = "a" * 64
+        mock_obj = MagicMock()
+        mock_obj.uuid = "id1"
+        mock_obj.properties = {
+            "_mem0_sidecar_mutation_id": marker,
+            "_mem0_sidecar_project_id": "project-a",
+            "_mem0_sidecar_app_id": "app-a",
+        }
+        mock_response = MagicMock()
+        mock_response.objects = [mock_obj]
+        mock_fetch = MagicMock(return_value=mock_response)
+        self.client_mock.collections.get.return_value.query.fetch_objects = mock_fetch
+
+        results = self.weaviate_db.list(
+            filters={"_mem0_sidecar_mutation_id": marker},
+            top_k=10,
+        )
+
+        call = mock_fetch.call_args.kwargs
+        self.assertIsNotNone(call["filters"])
+        self.assertIn("_mem0_sidecar_mutation_id", call["return_properties"])
+        self.assertIn("_mem0_sidecar_project_id", call["return_properties"])
+        self.assertIn("_mem0_sidecar_app_id", call["return_properties"])
+        self.assertEqual(
+            results[0][0].payload["_mem0_sidecar_mutation_id"],
+            marker,
+        )
+
     def test_list_cols(self):
         mock_collection1 = MagicMock()
         mock_collection1.name = "collection1"

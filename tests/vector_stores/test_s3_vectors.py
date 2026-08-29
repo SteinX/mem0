@@ -272,3 +272,45 @@ def test_list_filters_metadata_client_side(mock_boto_client):
     [results] = store.list(filters={"user_id": "alice", "category": "work"})
 
     assert [result.id for result in results] == ["id1"]
+
+
+def test_list_mutation_marker_uses_bounded_metadata_query(mock_boto_client):
+    marker = "a" * 64
+    mock_paginator = mock_boto_client.get_paginator.return_value
+    mock_paginator.paginate.return_value = [
+        {
+            "vectors": [
+                {
+                    "key": "id1",
+                    "metadata": {
+                        "user_id": "alice",
+                        "_mem0_sidecar_mutation_id": marker,
+                    },
+                }
+            ]
+        }
+    ]
+    store = S3Vectors(
+        vector_bucket_name=BUCKET_NAME,
+        collection_name=INDEX_NAME,
+        embedding_model_dims=EMBEDDING_DIMS,
+    )
+
+    [results] = store.list(
+        filters={
+            "user_id": "alice",
+            "_mem0_sidecar_mutation_id": marker,
+        },
+        top_k=1000,
+    )
+
+    mock_boto_client.get_paginator.assert_called_once_with("query_vectors")
+    query = mock_paginator.paginate.call_args.kwargs
+    assert query["filter"] == {
+        "user_id": "alice",
+        "_mem0_sidecar_mutation_id": marker,
+    }
+    assert query["topK"] == 1000
+    assert query["queryVector"]["float32"][0] == 1.0
+    assert len(query["queryVector"]["float32"]) == EMBEDDING_DIMS
+    assert [result.id for result in results] == ["id1"]

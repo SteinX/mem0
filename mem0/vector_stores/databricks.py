@@ -29,6 +29,15 @@ from mem0.vector_stores.base import VectorStoreBase
 
 logger = logging.getLogger(__name__)
 
+_MUTATION_MARKER_KEY = "_mem0_sidecar_mutation_id"
+_PROJECT_SCOPE_KEY = "_mem0_sidecar_project_id"
+_APP_SCOPE_KEY = "_mem0_sidecar_app_id"
+_SOURCE_ONLY_COLUMNS = {
+    _MUTATION_MARKER_KEY,
+    _PROJECT_SCOPE_KEY,
+    _APP_SCOPE_KEY,
+}
+
 
 class MemoryResult(BaseModel):
     id: Optional[str] = None
@@ -199,7 +208,25 @@ class Databricks(VectorStoreBase):
                     position=9,
                 )
             )
+        for name, comment in (
+            (_MUTATION_MARKER_KEY, "Sidecar mutation marker"),
+            (_PROJECT_SCOPE_KEY, "Sidecar project scope"),
+            (_APP_SCOPE_KEY, "Sidecar application scope"),
+        ):
+            self.columns.append(
+                ColumnInfo(
+                    name=name,
+                    type_name=ColumnTypeName.STRING,
+                    type_text="string",
+                    type_json='{"type":"string"}',
+                    comment=comment,
+                    position=len(self.columns),
+                )
+            )
         self.column_names = [col.name for col in self.columns]
+        self._vector_index_column_names = [
+            name for name in self.column_names if name not in _SOURCE_ONLY_COLUMNS
+        ]
 
         # Initialize Databricks workspace client
         client_config = {}
@@ -234,6 +261,7 @@ class Databricks(VectorStoreBase):
 
         # Get the warehouse ID by name
         self.warehouse_id = next((w.id for w in self.client.warehouses.list() if w.name == warehouse_name), None)
+        self._ensure_sidecar_metadata_columns()
 
         # Initialize endpoint (required in Databricks)
         self._ensure_endpoint_exists()
@@ -242,6 +270,29 @@ class Databricks(VectorStoreBase):
         collections = self.list_cols()
         if self.fully_qualified_index_name not in collections:
             self.create_col()
+
+    def _ensure_sidecar_metadata_columns(self):
+        if not self.client.tables.exists(self.fully_qualified_table_name).table_exists:
+            return
+        table = self.client.tables.get(self.fully_qualified_table_name)
+        existing_columns = {column.name for column in (table.columns or [])}
+        missing_columns = _SOURCE_ONLY_COLUMNS - existing_columns
+        if not missing_columns:
+            return
+        additions = ", ".join(f"{name} STRING" for name in sorted(missing_columns))
+        response = self.client.statement_execution.execute_statement(
+            statement=(
+                f"ALTER TABLE {self.fully_qualified_table_name} "
+                f"ADD COLUMNS ({additions})"
+            ),
+            warehouse_id=self.warehouse_id,
+            wait_timeout="30s",
+        )
+        if response.status.state.value != "SUCCEEDED":
+            raise RuntimeError(
+                f"Failed to add sidecar metadata columns to {self.fully_qualified_table_name}: "
+                f"{response.status.error}"
+            )
 
     def _ensure_endpoint_exists(self):
         """Ensure the vector search endpoint exists, create if it doesn't."""
@@ -331,7 +382,7 @@ class Databricks(VectorStoreBase):
                     delta_sync_index_spec=DeltaSyncVectorIndexSpecRequest(
                         source_table=self.fully_qualified_table_name,
                         pipeline_type=self.pipeline_type,
-                        columns_to_sync=self.column_names,
+                        columns_to_sync=self._vector_index_column_names,
                         embedding_source_columns=embedding_source_columns,
                     ),
                 )
@@ -481,7 +532,7 @@ class Databricks(VectorStoreBase):
             # - query_vector: for Direct Access Index and Delta Sync Index with self-managed vectors
             query_kwargs = {
                 "index_name": self.fully_qualified_index_name,
-                "columns": self.column_names,
+                "columns": self._vector_index_column_names,
                 "num_results": top_k,
                 "query_type": self.query_type,
                 "filters_json": filters_json,
@@ -507,11 +558,18 @@ class Databricks(VectorStoreBase):
             memory_results = []
             for row in data_array:
                 # Map columns to values
-                row_dict = dict(zip(self.column_names, row)) if isinstance(row, (list, tuple)) else row
-                score = row_dict.get("score") or (
-                    row[-1] if isinstance(row, (list, tuple)) and len(row) > len(self.column_names) else None
+                row_dict = (
+                    dict(zip(self._vector_index_column_names, row))
+                    if isinstance(row, (list, tuple))
+                    else row
                 )
-                payload = {k: row_dict.get(k) for k in self.column_names}
+                score = row_dict.get("score") or (
+                    row[-1]
+                    if isinstance(row, (list, tuple))
+                    and len(row) > len(self._vector_index_column_names)
+                    else None
+                )
+                payload = {k: row_dict.get(k) for k in self._vector_index_column_names}
                 payload["data"] = payload.get("memory", "")
                 memory_id = row_dict.get("memory_id") or row_dict.get("id")
                 memory_results.append(MemoryResult(id=memory_id, score=score, payload=payload))
@@ -544,7 +602,7 @@ class Databricks(VectorStoreBase):
 
             sdk_results = self.client.vector_search_indexes.query_index(
                 index_name=self.fully_qualified_index_name,
-                columns=self.column_names,
+                columns=self._vector_index_column_names,
                 query_text=query,
                 num_results=top_k,
                 query_type="FULL_TEXT",
@@ -556,11 +614,18 @@ class Databricks(VectorStoreBase):
 
             memory_results = []
             for row in data_array:
-                row_dict = dict(zip(self.column_names, row)) if isinstance(row, (list, tuple)) else row
-                score = row_dict.get("score") or (
-                    row[-1] if isinstance(row, (list, tuple)) and len(row) > len(self.column_names) else None
+                row_dict = (
+                    dict(zip(self._vector_index_column_names, row))
+                    if isinstance(row, (list, tuple))
+                    else row
                 )
-                payload = {k: row_dict.get(k) for k in self.column_names}
+                score = row_dict.get("score") or (
+                    row[-1]
+                    if isinstance(row, (list, tuple))
+                    and len(row) > len(self._vector_index_column_names)
+                    else None
+                )
+                payload = {k: row_dict.get(k) for k in self._vector_index_column_names}
                 payload["data"] = payload.get("memory", "")
                 memory_id = row_dict.get("memory_id") or row_dict.get("id")
                 memory_results.append(MemoryResult(id=memory_id, score=score, payload=payload))
@@ -677,7 +742,7 @@ class Databricks(VectorStoreBase):
             # Use query_text for Delta Sync with model endpoint, query_vector otherwise
             query_kwargs = {
                 "index_name": self.fully_qualified_index_name,
-                "columns": self.column_names,
+                "columns": self._vector_index_column_names,
                 "num_results": 1,
                 "query_type": self.query_type,
                 "filters_json": filters_json,
@@ -782,6 +847,47 @@ class Databricks(VectorStoreBase):
             logger.error(f"Failed to get info for index '{name or self.index_name}': {e}")
             raise
 
+    def _memory_results_from_rows(self, data_array, columns):
+        memory_results = []
+        for row in data_array:
+            row_dict = dict(zip(columns, row)) if isinstance(row, (list, tuple)) else row
+            payload = {k: row_dict.get(k) for k in columns}
+            if payload.get("metadata"):
+                try:
+                    payload.update(json.loads(payload["metadata"]))
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            memory_id = row_dict.get("memory_id") or row_dict.get("id")
+            payload["data"] = payload["memory"]
+            memory_results.append(MemoryResult(id=memory_id, payload=payload))
+        return [memory_results]
+
+    def _list_exact_mutation_marker(self, filters, top_k):
+        supported_filters = {"user_id", "agent_id", "run_id", _MUTATION_MARKER_KEY}
+        clauses = []
+        params = []
+        for key, value in filters.items():
+            if key not in supported_filters:
+                raise ValueError(f"Unsupported exact marker filter: {key!r}")
+            clauses.append(f"{key} = :filter_{key}")
+            params.append(StatementParameterListItem(name=f"filter_{key}", value=str(value)))
+        columns = self.column_names
+        statement = (
+            f"SELECT {', '.join(columns)} FROM {self.fully_qualified_table_name} "
+            f"WHERE {' AND '.join(clauses)} LIMIT {int(top_k or 100)}"
+        )
+        response = self.client.statement_execution.execute_statement(
+            statement=statement,
+            warehouse_id=self.warehouse_id,
+            wait_timeout="30s",
+            parameters=params,
+        )
+        if response.status.state.value != "SUCCEEDED":
+            raise RuntimeError(f"Exact marker lookup failed: {response.status.error}")
+        result = response.result
+        data_array = result.data_array if result and result.data_array else []
+        return self._memory_results_from_rows(data_array, columns)
+
     def list(self, filters: dict = None, top_k: int = None) -> list[MemoryResult]:
         """
         List all recent created memories from the vector store.
@@ -793,10 +899,12 @@ class Databricks(VectorStoreBase):
         Returns:
             List containing list of MemoryResult objects.
         """
+        if filters and _MUTATION_MARKER_KEY in filters:
+            return self._list_exact_mutation_marker(filters, top_k)
         try:
             filters_json = json.dumps(filters) if filters else None
             num_results = top_k or 100
-            columns = self.column_names
+            columns = self._vector_index_column_names
             # Use query_text for Delta Sync with model endpoint, query_vector otherwise
             query_kwargs = {
                 "index_name": self.fully_qualified_index_name,
@@ -817,20 +925,7 @@ class Databricks(VectorStoreBase):
             result_data = sdk_results.result if hasattr(sdk_results, "result") else sdk_results
             data_array = result_data.data_array if hasattr(result_data, "data_array") else []
 
-            memory_results = []
-            for row in data_array:
-                row_dict = dict(zip(columns, row)) if isinstance(row, (list, tuple)) else row
-                payload = {k: row_dict.get(k) for k in columns}
-                # Parse metadata if present
-                if "metadata" in payload and payload["metadata"]:
-                    try:
-                        payload.update(json.loads(payload["metadata"]))
-                    except Exception:
-                        pass
-                memory_id = row_dict.get("memory_id") or row_dict.get("id")
-                payload['data'] = payload['memory']
-                memory_results.append(MemoryResult(id=memory_id, payload=payload))
-            return [memory_results]
+            return self._memory_results_from_rows(data_array, columns)
         except Exception as e:
             logger.error(f"Failed to list memories: {e}")
             return []

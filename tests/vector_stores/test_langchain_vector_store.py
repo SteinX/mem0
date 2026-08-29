@@ -161,7 +161,16 @@ def test_list_with_filters(langchain_instance):
     results = langchain_instance.list(filters=filters, top_k=10)
 
     # Verify that the collection.get method was called with the correct filters
-    mock_collection.get.assert_called_once_with(where=filters, limit=10)
+    mock_collection.get.assert_called_once_with(
+        where={
+            "$and": [
+                {"user_id": "alice"},
+                {"agent_id": "agent1"},
+                {"run_id": "run1"},
+            ]
+        },
+        limit=10,
+    )
 
     # Verify the results
     assert len(results) == 1
@@ -192,6 +201,33 @@ def test_list_with_single_filter(langchain_instance):
     assert len(results) == 1
     assert len(results[0]) == 1
     assert results[0][0].payload["user_id"] == "alice"
+
+
+def test_list_with_entity_and_mutation_marker_filters(langchain_instance):
+    marker = "a" * 64
+    mock_collection = Mock()
+    mock_collection.get.return_value = {
+        "ids": [["id1"]],
+        "metadatas": [[{"user_id": "alice", "_mem0_sidecar_mutation_id": marker}]],
+        "documents": [["test document"]],
+    }
+    langchain_instance.client._collection = mock_collection
+
+    results = langchain_instance.list(
+        filters={"user_id": "alice", "_mem0_sidecar_mutation_id": marker},
+        top_k=1000,
+    )
+
+    mock_collection.get.assert_called_once_with(
+        where={
+            "$and": [
+                {"user_id": "alice"},
+                {"_mem0_sidecar_mutation_id": marker},
+            ]
+        },
+        limit=1000,
+    )
+    assert results[0][0].payload["_mem0_sidecar_mutation_id"] == marker
 
 
 def test_list_with_no_filters(langchain_instance):

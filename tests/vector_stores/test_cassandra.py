@@ -220,6 +220,31 @@ def test_list(cassandra_instance):
     assert len(results) > 0
 
 
+def test_list_filters_before_applying_top_k(cassandra_instance):
+    rows = []
+    for index in range(1001):
+        row = Mock()
+        row.id = f"id-{index}"
+        row.vector = [0.1, 0.2, 0.3]
+        row.payload = json.dumps(
+            {
+                "user_id": "alice",
+                "_mem0_sidecar_mutation_id": "a" * 64 if index == 1000 else "b" * 64,
+            }
+        )
+        rows.append(row)
+    cassandra_instance.session.execute = Mock(return_value=rows)
+
+    results = cassandra_instance.list(
+        filters={"user_id": "alice", "_mem0_sidecar_mutation_id": "a" * 64},
+        top_k=1,
+    )
+
+    query = cassandra_instance.session.execute.call_args.args[0]
+    assert "LIMIT" not in query
+    assert [result.id for result in results[0]] == ["id-1000"]
+
+
 def test_reset(cassandra_instance):
     """Test resetting the collection."""
     cassandra_instance.reset()
@@ -314,4 +339,3 @@ def test_insert_without_payloads(cassandra_instance):
 
     assert cassandra_instance.session.prepare.called
     assert cassandra_instance.session.execute.called
-

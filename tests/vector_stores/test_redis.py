@@ -6,6 +6,7 @@ overwriting the real embedding. The fix skips the embedding field entirely
 when vector is None.
 """
 
+import json
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
@@ -21,7 +22,7 @@ def _make_redis_db():
     db = RedisDB.__new__(RedisDB)
     mock_index = MagicMock()
     db.index = mock_index
-    db.schema = {"index": {"prefix": "mem0:test"}}
+    db.schema = {"index": {"name": "test", "prefix": "mem0:test"}}
     return db, mock_index
 
 
@@ -113,6 +114,166 @@ def test_list_with_filter_builds_query():
 
     query = mock_index.search.call_args[0][0]
     assert query.query_string() == "@user_id:{alice}"
+
+
+def test_mutation_marker_is_indexed_and_filterable():
+    from mem0.vector_stores.redis import DEFAULT_FIELDS
+
+    marker = "a" * 64
+    assert {"name": "_mem0_sidecar_mutation_id", "type": "tag"} in DEFAULT_FIELDS
+
+    db, mock_index = _make_redis_db()
+    mock_index.search.return_value = MagicMock(docs=[])
+
+    db.list(filters={"_mem0_sidecar_mutation_id": marker})
+
+    assert mock_index.search.call_count == 2
+    query = mock_index.search.call_args_list[0].args[0]
+    assert query.query_string() == f"@_mem0_sidecar_mutation_id:{{{marker}}}"
+    fallback_query = mock_index.search.call_args_list[1].args[0]
+    assert fallback_query.query_string() == f'@metadata:"{marker}"'
+
+
+def test_insert_and_update_copy_mutation_marker_to_indexed_field():
+    db, mock_index = _make_redis_db()
+    marker = "b" * 64
+    payload = {
+        "data": "memory",
+        "user_id": "alice",
+        "_mem0_sidecar_mutation_id": marker,
+    }
+
+    db.insert(vectors=[[0.1, 0.2]], payloads=[payload], ids=["memory-1"])
+    inserted = mock_index.load.call_args.args[0][0]
+    assert inserted["_mem0_sidecar_mutation_id"] == marker
+
+    mock_index.reset_mock()
+    db.update(vector_id="memory-1", vector=None, payload=payload)
+    updated = mock_index.load.call_args.kwargs["data"][0]
+    assert updated["_mem0_sidecar_mutation_id"] == marker
+
+
+def test_backfill_indexes_mutation_marker_from_legacy_metadata():
+    class RedisDocument:
+        def __init__(self, **values):
+            self.__dict__.update(values)
+
+        def __getitem__(self, key):
+            return self.__dict__[key]
+
+    db, mock_index = _make_redis_db()
+    db.client = MagicMock()
+    db.client.get.return_value = None
+    db.client.set.return_value = True
+    db.client.scan_iter.return_value = [
+        b"mem0:test:legacy",
+        b"mem0:test:invalid",
+    ]
+    marker = "c" * 64
+    db.client.hget.side_effect = [
+        ('{"_mem0_sidecar_mutation_id":"' + marker + '","category":"legacy"}').encode(),
+        b'{"_mem0_sidecar_mutation_id":"not-a-marker"}',
+    ]
+
+    db._backfill_mutation_marker_tags()
+
+    db.client.scan_iter.assert_called_once_with(match="mem0:test:*", count=500)
+    db.client.hset.assert_called_once_with(
+        b"mem0:test:legacy",
+        mapping={"_mem0_sidecar_mutation_id": marker},
+    )
+    state_key = "mem0:migrations:test:mutation-marker-tag-v1"
+    db.client.set.assert_any_call(f"{state_key}:lock", "1", nx=True, ex=900)
+    db.client.set.assert_any_call(state_key, "done")
+    db.client.delete.assert_called_once_with(f"{state_key}:lock")
+
+    mock_index.search.return_value = MagicMock(
+        docs=[
+            RedisDocument(
+                memory_id="legacy",
+                hash="legacy-hash",
+                memory="late result",
+                created_at="0",
+                user_id="alice",
+                metadata=(
+                    '{"_mem0_sidecar_mutation_id":"'
+                    + marker
+                    + '","category":"legacy"}'
+                ),
+            )
+        ]
+    )
+    results = db.list(
+        filters={
+            "user_id": "alice",
+            "_mem0_sidecar_mutation_id": marker,
+        },
+        top_k=1000,
+    )
+    assert results[0][0].id == "legacy"
+    assert results[0][0].payload["_mem0_sidecar_mutation_id"] == marker
+    assert "@_mem0_sidecar_mutation_id" in mock_index.search.call_args.args[0].query_string()
+
+    db.client.scan_iter.reset_mock()
+    db.client.get.return_value = b"done"
+    db._backfill_mutation_marker_tags()
+    db.client.scan_iter.assert_not_called()
+
+
+def test_exact_marker_list_repairs_late_legacy_write():
+    class RedisDocument:
+        def __init__(self, **values):
+            self.__dict__.update(values)
+
+        def __getitem__(self, key):
+            return self.__dict__[key]
+
+    db, mock_index = _make_redis_db()
+    marker = "d" * 64
+    db.client = MagicMock()
+    mock_index.search.side_effect = [
+        MagicMock(docs=[]),
+        MagicMock(
+            docs=[
+                RedisDocument(
+                    memory_id="late",
+                    hash="late-hash",
+                    memory="late result",
+                    created_at="0",
+                    user_id="alice",
+                    metadata=json.dumps({"_mem0_sidecar_mutation_id": marker}),
+                )
+            ]
+        ),
+    ]
+
+    results = db.list(
+        filters={"user_id": "alice", "_mem0_sidecar_mutation_id": marker},
+        top_k=1000,
+    )
+
+    assert results[0][0].id == "late"
+    assert results[0][0].payload["_mem0_sidecar_mutation_id"] == marker
+    fallback_query = mock_index.search.call_args_list[1].args[0].query_string()
+    assert "@user_id:{alice}" in fallback_query
+    assert f'@metadata:"{marker}"' in fallback_query
+    db.client.scan_iter.assert_not_called()
+    db.client.hset.assert_called_once_with(
+        "mem0:test:late",
+        mapping={"_mem0_sidecar_mutation_id": marker},
+    )
+
+
+def test_exact_marker_list_does_not_scan_when_marker_is_absent():
+    db, mock_index = _make_redis_db()
+    db.client = MagicMock()
+    mock_index.search.side_effect = [MagicMock(docs=[]), MagicMock(docs=[])]
+
+    assert db.list(filters={"user_id": "alice", "_mem0_sidecar_mutation_id": "e" * 64}) == [[]]
+
+    assert mock_index.search.call_count == 2
+    db.client.scan_iter.assert_not_called()
+    db.client.hset.assert_not_called()
 
 
 def test_create_col_keeps_distinct_dims_across_instances():
