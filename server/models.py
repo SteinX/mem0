@@ -72,3 +72,19 @@ class Settings(Base):
         default=_utcnow,
         onupdate=_utcnow,
     )
+
+
+class MutationReceipt(Base):
+    """Mutable durable execution state; terminal receipts are never reclaimed."""
+
+    __tablename__ = "mutation_receipts"
+
+    mutation_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    project_id: Mapped[str] = mapped_column(Text)
+    app_id: Mapped[str] = mapped_column(Text)
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(16))
+    result_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
