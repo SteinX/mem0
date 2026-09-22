@@ -5,6 +5,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 import telemetry
+import mutation_receipts
 from auth import (
     ADMIN_API_KEY,
     AUTH_DISABLED,
@@ -372,21 +373,42 @@ def generate_instructions(req: GenerateInstructionsRequest, _auth=Depends(verify
 
 
 @app.post("/memories", summary="Create memories")
-def add_memory(memory_create: MemoryCreate, _auth=Depends(verify_auth)):
+def add_memory(memory_create: MemoryCreate, request: Request, _auth=Depends(verify_auth)):
     """Store new memories."""
     if not any([memory_create.user_id, memory_create.agent_id, memory_create.run_id]):
         raise HTTPException(status_code=400, detail="At least one identifier (user_id, agent_id, run_id) is required.")
 
     params = {k: v for k, v in memory_create.model_dump().items() if v is not None and k != "messages"}
+    receipt = None
+    if mutation_receipts.MARKER in (memory_create.metadata or {}):
+        reject_client_api_key(request, "Client API keys cannot use reserved mutation markers.")
+        if not ((_auth is not None and _auth.role == "admin") or
+                (_auth is None and getattr(request.state, "auth_type", "none") in {"admin_api_key", "disabled"})):
+            raise HTTPException(403, "Admin role required for mutation receipts.")
+        receipt = mutation_receipts.claim(SessionLocal, memory_create.model_dump(mode="json"))
+        if receipt.status == "SUCCEEDED":
+            return JSONResponse(content=receipt.result)
     try:
         response = get_memory_instance().add(messages=[m.model_dump() for m in memory_create.messages], **params)
-        if response.get("results"):
-            telemetry.log_dashboard_nudge_once(DASHBOARD_URL)
-        return JSONResponse(content=response)
     except (ValueError, Mem0ValidationError) as e:
+        if receipt is not None:
+            mutation_receipts.fail(SessionLocal, receipt)
         raise _client_error(e)
     except Exception:
+        if receipt is not None:
+            mutation_receipts.fail(SessionLocal, receipt)
         raise upstream_error()
+    if receipt is not None:
+        mutation_receipts.succeed(SessionLocal, receipt, response)
+    if response.get("results"):
+        telemetry.log_dashboard_nudge_once(DASHBOARD_URL)
+    return JSONResponse(content=response)
+
+
+@app.get("/internal/mutations/{marker}", response_model=mutation_receipts.Receipt,
+         response_model_exclude_none=True, include_in_schema=False)
+def get_mutation_receipt(marker: str, _auth=Depends(require_admin)):
+    return mutation_receipts.read(SessionLocal, marker)
 
 
 DEFAULT_ALL_MEMORIES_LIMIT = 1000
