@@ -1,5 +1,7 @@
 jest.mock("pg", () => {
-  throw new Error("Cannot find module 'pg'");
+  throw Object.assign(new Error("Cannot find module 'pg'"), {
+    code: "MODULE_NOT_FOUND",
+  });
 });
 
 jest.mock("natural", () => {
