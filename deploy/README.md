@@ -43,11 +43,17 @@ image reference before upgrading an existing database.
 ## Publishing the server image
 
 In `SteinX/mem0`, publishing a GitHub Release with a version tag such as
-`v2.2.1-steinx.1` automatically runs `Publish Mem0 Server Image`. It builds
+`v2.2.1-steinx.1` enters the Release Router, which calls `Publish Mem0 Server
+Image` with the original release context. It builds
 the exact tagged commit and publishes `ghcr.io/steinx/mem0:<tag>` and a
-`sha-<short-commit>` tag. Stable releases also update `latest`; prereleases
-do not. Saving a draft or pushing a Git tag alone does not publish an image.
-The upstream package Release Router remains restricted to `mem0ai/mem0`.
+`sha-<short-commit>` tag. Automatic stable releases update `latest` only when
+their tag matches GitHub's latest stable Release after the immutable image has
+been built and pushed, immediately before promoting its digest;
+prereleases do not. Publication runs share one queue, preserving up to 100
+pending runs and serializing updates across release tags. Saving a draft or
+pushing a Git tag alone does not publish an image. The router remains the only
+published-Release listener, and upstream package dispatch remains restricted
+to `mem0ai/mem0`.
 
 To retry publication without recreating a Release, run the workflow manually
 from `main` and supply the existing Git tag:

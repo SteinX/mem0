@@ -3,7 +3,7 @@ name: Release Router 🚦
 # Single entry point for all release publishing.
 #
 # Package CD workflows no longer listen to release events themselves — this
-# router inspects the release tag and dispatches only the matching pipeline,
+# router inspects the release tag and selects only the matching pipeline,
 # so each release produces one routed run instead of one real run plus seven
 # skipped ones.
 #
@@ -26,9 +26,11 @@ permissions:
 
 jobs:
   route:
-    if: github.repository == 'mem0ai/mem0'
+    if: github.repository == 'mem0ai/mem0' || github.repository == 'SteinX/mem0'
     name: Route ${{ github.event.release.tag_name }} to its CD pipeline
     runs-on: ubuntu-latest
+    outputs:
+      workflow: ${{ steps.match.outputs.workflow }}
     steps:
       - name: Match tag prefix to CD workflow
         id: match
@@ -49,7 +51,13 @@ jobs:
             deepseek-plugin-v*)  workflow="deepseek-plugin-cd.yml" ;;
             n8n-nodes-mem0-v*) workflow="n8n-nodes-mem0-cd.yml" ;;
             mem0-strands-v*)   workflow="mem0-strands-cd.yml" ;;
-            v*)           workflow="cd.yml" ;;
+            v*)
+              if [ "$GITHUB_REPOSITORY" = "SteinX/mem0" ]; then
+                workflow="publish-server-image.yml"
+              else
+                workflow="cd.yml"
+              fi
+              ;;
             *)
               echo "::error::Release tag '$TAG' does not match any known package prefix — nothing will be published. See the tag prefix table in AGENTS.md."
               exit 1
@@ -59,6 +67,7 @@ jobs:
           echo ":outbox_tray: Routed \`$TAG\` → \`$workflow\`" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Dispatch ${{ steps.match.outputs.workflow }}
+        if: github.repository == 'mem0ai/mem0'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.event.release.tag_name }}
@@ -70,3 +79,15 @@ jobs:
             --ref "refs/tags/$TAG" \
             -f tag="$TAG" \
             -f prerelease="${{ github.event.release.prerelease }}"
+
+  server:
+    name: Publish fork server image
+    needs: route
+    if: github.repository == 'SteinX/mem0' && needs.route.outputs.workflow == 'publish-server-image.yml'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/publish-server-image.yml
+    with:
+      image_tag: ${{ github.event.release.tag_name }}
+      push_latest: ${{ !github.event.release.prerelease }}

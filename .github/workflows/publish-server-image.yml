@@ -1,8 +1,17 @@
 name: Publish Mem0 Server Image
 
 on:
-  release:
-    types: [published]
+  workflow_call:
+    inputs:
+      image_tag:
+        description: Image tag to publish from an existing Git tag.
+        required: true
+        type: string
+      push_latest:
+        description: Also update the latest tag.
+        required: false
+        default: false
+        type: boolean
   workflow_dispatch:
     inputs:
       image_tag:
@@ -24,7 +33,7 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ghcr.io/steinx/mem0
   IMAGE_TAG: ${{ github.event.release.tag_name || inputs.image_tag }}
-  PUSH_LATEST: ${{ (github.event_name == 'release' && !github.event.release.prerelease) || (github.event_name == 'workflow_dispatch' && inputs.push_latest) }}
+  PUSH_LATEST: ${{ inputs.push_latest }}
 
 jobs:
   publish:
@@ -32,8 +41,9 @@ jobs:
     name: Build and publish server image
     runs-on: ubuntu-latest
     concurrency:
-      group: server-image-${{ github.event.release.tag_name || inputs.image_tag }}
+      group: server-image-${{ github.repository }}
       cancel-in-progress: false
+      queue: max
 
     steps:
       - name: Validate requested tag
@@ -78,7 +88,6 @@ jobs:
           images: ${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=${{ env.IMAGE_TAG }}
-            type=raw,value=latest,enable=${{ env.PUSH_LATEST }}
             type=raw,value=sha-${{ steps.release.outputs.short_sha }}
           labels: |
             org.opencontainers.image.revision=${{ steps.release.outputs.sha }}
@@ -103,7 +112,33 @@ jobs:
           cache-from: type=gha,scope=server
           cache-to: type=gha,scope=server,mode=max
 
+      - name: Decide latest promotion
+        id: latest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          push_latest="$PUSH_LATEST"
+          if [ "$GITHUB_EVENT_NAME" = "release" ] && [ "$push_latest" = "true" ]; then
+            latest_tag=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
+            if [ "$latest_tag" != "$IMAGE_TAG" ]; then
+              push_latest=false
+              echo "::notice::Skipping latest for outdated release tag: $IMAGE_TAG (current: $latest_tag)"
+            fi
+          fi
+          echo "push_latest=$push_latest" >> "$GITHUB_OUTPUT"
+
+      - name: Promote latest
+        if: steps.latest.outputs.push_latest == 'true'
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          docker buildx imagetools create --prefer-index=false \
+            --tag "$IMAGE_NAME:latest" "$IMAGE_NAME@$IMAGE_DIGEST"
+
       - name: Publish summary
+        env:
+          PUSH_LATEST: ${{ steps.latest.outputs.push_latest }}
         run: |
           {
             echo "### Mem0 server image"
