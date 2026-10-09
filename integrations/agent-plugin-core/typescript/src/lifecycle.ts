@@ -6,6 +6,10 @@ const MAX_RECALL_QUERY_CHARS = 6_000;
 export const DEFAULT_MAX_CONTEXT_CHARS = 4_000;
 
 const SECRET_PATTERNS: Array<[RegExp, string]> = [
+  [
+    /("(?:authorization|api[_-]?key|secret[_-]?access[_-]?key|session[_-]?token|access[_-]?token|refresh[_-]?token|password|credential)"\s*:\s*)"(?:\\[\s\S]|[^"\\])*"/gi,
+    '$1"[REDACTED]"',
+  ],
   [/(authorization\s*[:=]\s*(?:bearer|token)\s+)[^\s"']+/gi, "$1[REDACTED]"],
   [
     /((?:api[_-]?key|secret[_-]?access[_-]?key|session[_-]?token)\s*[:=]\s*)[^\s"']+/gi,

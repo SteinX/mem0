@@ -22,17 +22,24 @@ test("one lifecycle owns recall state and resets it for a new session", async ()
 
 test("one lifecycle owns capture preparation", () => {
   const lifecycle = createMemoryLifecycle();
+  const jsonCredential = JSON.stringify({
+    password: 'hunter2"still-secret',
+    public: "visible",
+  });
 
-  assert.deepEqual(
-    lifecycle.prepareConversation([
-      { role: "user", content: "password=secret-value" },
-      { role: "assistant", content: "Configured it" },
-    ]),
-    [
-      { role: "user", content: "password=[REDACTED]" },
-      { role: "assistant", content: "Configured it" },
-    ],
-  );
+  const conversation = lifecycle.prepareConversation([
+    { role: "user", content: jsonCredential },
+    { role: "assistant", content: "Configured it" },
+  ]);
+
+  assert.deepEqual(JSON.parse(conversation[0]?.content ?? ""), {
+    password: "[REDACTED]",
+    public: "visible",
+  });
+  assert.deepEqual(conversation[1], {
+    role: "assistant",
+    content: "Configured it",
+  });
 });
 
 test("capture preserves long prompts and responses while redacting secrets", () => {
@@ -109,6 +116,22 @@ test("recall is bounded, fail-open, and de-duplicates already injected memories"
     }),
     "",
   );
+});
+
+test("recall redacts complete quoted JSON credentials while preserving public values", async () => {
+  const credential = JSON.stringify({
+    api_key: 'private-value"still-private',
+    public: "safe-to-recall",
+  });
+
+  const output = await buildRecallContext("configuration", true, async () => ({
+    results: [{ id: "json-secret", memory: credential }],
+  }));
+
+  assert.equal(output.includes("private-value"), false);
+  assert.equal(output.includes("still-private"), false);
+  assert.match(output, /"api_key":"\[REDACTED\]"/);
+  assert.match(output, /"public":"safe-to-recall"/);
 });
 
 test("recall times out without blocking the host turn", async () => {
