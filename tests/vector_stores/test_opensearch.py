@@ -501,7 +501,6 @@ class TestOpenSearchDB(unittest.TestCase):
 
 
 # Tests for OpenSearch config deepcopy with AWS authentication (Issue #3464)
-@pytest.mark.parametrize("telemetry_enabled", [False, True])
 @patch("mem0.utils.factory.EmbedderFactory.create")
 @patch("mem0.utils.factory.VectorStoreFactory.create")
 @patch("mem0.utils.factory.LlmFactory.create")
@@ -567,6 +566,7 @@ def test_safe_deepcopy_config_normal_configs(mock_sqlite, mock_llm_factory, mock
 @patch("mem0.utils.factory.VectorStoreFactory.create")
 @patch("mem0.utils.factory.LlmFactory.create")
 @patch("mem0.memory.storage.SQLiteManager")
+@pytest.mark.parametrize("telemetry_enabled", [False, True])
 def test_memory_initialization_opensearch_aws_auth(
     mock_sqlite, mock_llm_factory, mock_vector_factory, mock_embedder_factory,
     monkeypatch: pytest.MonkeyPatch, telemetry_enabled: bool,
