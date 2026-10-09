@@ -39,3 +39,23 @@ embedding stack uses TEI `1.9.4` with BGE-M3 revision
 `5617a9f61b028005a4858fdac845db406aefb181` and 1024 dimensions; PostgreSQL uses
 17.11 with pgvector 0.8.6. Set `MEM0_POSTGRES_IMAGE` to a verified immutable
 image reference before upgrading an existing database.
+
+## Publishing the server image
+
+In `SteinX/mem0`, publishing a GitHub Release with a version tag such as
+`v2.2.1-steinx.1` automatically runs `Publish Mem0 Server Image`. It builds
+the exact tagged commit and publishes `ghcr.io/steinx/mem0:<tag>` and a
+`sha-<short-commit>` tag. Stable releases also update `latest`; prereleases
+do not. Saving a draft or pushing a Git tag alone does not publish an image.
+The upstream package Release Router remains restricted to `mem0ai/mem0`.
+
+To retry publication without recreating a Release, run the workflow manually
+from `main` and supply the existing Git tag:
+
+```sh
+gh workflow run publish-server-image.yml --repo SteinX/mem0 --ref main \
+  -f image_tag=v2.2.1-steinx.1 -f push_latest=false
+```
+
+Set `push_latest=true` only when intentionally promoting a manual build.
+The workflow checks the tag and release commit before obtaining GHCR credentials.

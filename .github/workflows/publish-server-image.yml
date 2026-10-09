@@ -1,6 +1,8 @@
 name: Publish Mem0 Server Image
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       image_tag:
@@ -21,19 +23,20 @@ permissions:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ghcr.io/steinx/mem0
+  IMAGE_TAG: ${{ github.event.release.tag_name || inputs.image_tag }}
+  PUSH_LATEST: ${{ (github.event_name == 'release' && !github.event.release.prerelease) || (github.event_name == 'workflow_dispatch' && inputs.push_latest) }}
 
 jobs:
   publish:
+    if: github.repository == 'SteinX/mem0'
     name: Build and publish server image
     runs-on: ubuntu-latest
     concurrency:
-      group: server-image-${{ inputs.image_tag }}
+      group: server-image-${{ github.event.release.tag_name || inputs.image_tag }}
       cancel-in-progress: false
 
     steps:
       - name: Validate requested tag
-        env:
-          IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
           if [[ ! "$IMAGE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
             echo "::error::Invalid image tag: $IMAGE_TAG"
@@ -43,12 +46,19 @@ jobs:
       - name: Check out release tag
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ inputs.image_tag }}
+          ref: ${{ env.IMAGE_TAG }}
+          persist-credentials: false
 
       - name: Resolve release commit
         id: release
         run: |
-          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          source_sha=$(git rev-parse HEAD)
+          test "$(git rev-parse --verify "refs/tags/$IMAGE_TAG^{commit}")" = "$source_sha"
+          if [ "$GITHUB_EVENT_NAME" = "release" ]; then
+            test "$source_sha" = "$GITHUB_SHA"
+          fi
+          echo "sha=$source_sha" >> "$GITHUB_OUTPUT"
           echo "short_sha=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
@@ -67,17 +77,17 @@ jobs:
         with:
           images: ${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=${{ inputs.image_tag }}
-            type=raw,value=latest,enable=${{ inputs.push_latest }}
+            type=raw,value=${{ env.IMAGE_TAG }}
+            type=raw,value=latest,enable=${{ env.PUSH_LATEST }}
             type=raw,value=sha-${{ steps.release.outputs.short_sha }}
           labels: |
             org.opencontainers.image.revision=${{ steps.release.outputs.sha }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.version=${{ inputs.image_tag }}
+            org.opencontainers.image.version=${{ env.IMAGE_TAG }}
           annotations: |
             org.opencontainers.image.revision=${{ steps.release.outputs.sha }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.version=${{ inputs.image_tag }}
+            org.opencontainers.image.version=${{ env.IMAGE_TAG }}
 
       - name: Build and push server image
         id: build
@@ -98,8 +108,8 @@ jobs:
           {
             echo "### Mem0 server image"
             echo
-            echo "- Tag: \`${{ inputs.image_tag }}\`"
+            echo "- Tag: \`$IMAGE_TAG\`"
             echo "- Commit: \`${{ steps.release.outputs.sha }}\`"
             echo "- Digest: \`${{ steps.build.outputs.digest }}\`"
-            echo "- Latest: \`${{ inputs.push_latest }}\`"
+            echo "- Latest: \`$PUSH_LATEST\`"
           } >> "$GITHUB_STEP_SUMMARY"
