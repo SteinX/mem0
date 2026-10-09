@@ -149,6 +149,79 @@ def test_selfhosted_http_auth_and_tool_routes(plugin):
         client.close()
 
 
+def test_platform_backend_passes_identity_headers_to_sdk_client(plugin, monkeypatch):
+    backend = importlib.import_module(f"{plugin.__name__}._backend")
+    received = {}
+
+    class MemoryClient:
+        def __init__(self, *, api_key, client):
+            received["api_key"] = api_key
+            received["client"] = client
+
+    monkeypatch.setitem(sys.modules, "mem0", types.SimpleNamespace(MemoryClient=MemoryClient))
+    platform = backend.PlatformBackend("test-key")
+    try:
+        headers = received["client"].headers
+        assert received["api_key"] == "test-key"
+        assert headers["X-Mem0-Source"] == "MEM0_PLUGIN"
+        assert "X-Application" not in headers
+        assert headers["X-Mem0-Client"] == "hermes-plugin-mem0/1.3.0"
+        assert received["client"].timeout.read == 300.0
+        assert platform._client is not None
+    finally:
+        received["client"].close()
+
+
+def test_platform_backend_keeps_outer_identity_after_sdk_initialization(plugin, monkeypatch):
+    from mem0 import MemoryClient
+
+    backend = importlib.import_module(f"{plugin.__name__}._backend")
+
+    def validate_api_key(client):
+        client.org_id = "org"
+        client.project_id = "project"
+        return ""
+
+    monkeypatch.setattr(MemoryClient, "_validate_api_key", validate_api_key)
+    monkeypatch.setenv("MEM0_SOURCE", "outer-source")
+    monkeypatch.setenv("MEM0_APPLICATION", "outer-app")
+    monkeypatch.setenv("MEM0_CLIENT_STACK", "outer-client/1.0.0")
+    platform = backend.PlatformBackend("test-key")
+    try:
+        headers = platform._client.client.headers
+        assert headers["X-Mem0-Source"] == "outer-source"
+        assert headers["X-Application"] == "outer-app"
+        assert headers["X-Mem0-Client"].startswith("outer-client/1.0.0, hermes-plugin-mem0/1.3.0")
+        assert "mem0-python/" in headers["X-Mem0-Client"]
+        assert platform._client.client.timeout.read == 300.0
+    finally:
+        platform._client.client.close()
+
+
+def test_selfhosted_backend_preserves_outer_identity_headers(plugin, monkeypatch):
+    import httpx
+
+    backend = importlib.import_module(f"{plugin.__name__}._backend")
+    requests = []
+
+    def respond(request):
+        requests.append(request)
+        return httpx.Response(200, json={"results": []})
+
+    monkeypatch.setenv("MEM0_SOURCE", "outer-source")
+    monkeypatch.setenv("MEM0_APPLICATION", "outer-app")
+    monkeypatch.setenv("MEM0_CLIENT_STACK", "outer-client/1.0.0")
+    client = backend.SelfHostedBackend("", "http://localhost:8888", transport=httpx.MockTransport(respond))
+    try:
+        client.search("test", filters={"user_id": "u"})
+        headers = requests[0].headers
+        assert headers["X-Mem0-Source"] == "outer-source"
+        assert headers["X-Application"] == "outer-app"
+        assert headers["X-Mem0-Client"] == "outer-client/1.0.0, hermes-plugin-mem0/1.3.0"
+    finally:
+        client.close()
+
+
 @pytest.mark.parametrize("mode", ["platform", "selfhosted"])
 def test_setup_rotates_legacy_file_key(plugin, monkeypatch, tmp_path, mode):
     setup = importlib.import_module(f"{plugin.__name__}._setup")

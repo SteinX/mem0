@@ -1,0 +1,46 @@
+name: Hermes plugin checks
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'integrations/hermes-plugin-mem0/**'
+      - '.github/workflows/hermes-plugin-mem0-checks.yml'
+  workflow_call:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install test tooling
+        run: >-
+          python -m pip install
+          pytest
+          'mem0ai>=2.0.10,<3'
+          'httpx>=0.27,<1'
+          'ruff>=0.16,<0.17'
+          'isort>=5,<6'
+      - name: Lint
+        if: matrix.python-version == '3.12'
+        run: |
+          python -m ruff check integrations/hermes-plugin-mem0
+          python -m isort --check-only integrations/hermes-plugin-mem0
+      - name: Run offline tests
+        env:
+          MEM0_TELEMETRY: "false"
+        run: |
+          test_root="$(mktemp -d)"
+          trap 'rm -rf "$test_root"' EXIT
+          for test_file in integrations/hermes-plugin-mem0/tests/test_*.py; do
+            ln -s "$(realpath "$test_file")" "$test_root/$(basename "$test_file")"
+          done
+          python -m pytest -q --rootdir "$test_root" "$test_root"

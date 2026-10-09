@@ -13,6 +13,21 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+_PLATFORM_SOURCE = "MEM0_PLUGIN"
+_PLATFORM_CLIENT = "hermes-plugin-mem0/1.3.0"
+
+
+def _identity_headers() -> dict[str, str]:
+    outer_client = os.getenv("MEM0_CLIENT_STACK", "").strip()
+    headers = {
+        "X-Mem0-Source": os.getenv("MEM0_SOURCE", "").strip() or _PLATFORM_SOURCE,
+        "X-Mem0-Client": ", ".join(part for part in (outer_client, _PLATFORM_CLIENT) if part),
+    }
+    application = os.getenv("MEM0_APPLICATION", "").strip()
+    if application:
+        headers["X-Application"] = application
+    return headers
+
 
 def _add_kwargs(user_id: str, agent_id: str, infer: bool, metadata: dict | None) -> dict[str, Any]:
     return {"user_id": user_id, "agent_id": agent_id, "infer": infer, **({"metadata": metadata} if metadata else {})}
@@ -54,8 +69,14 @@ class PlatformBackend(Mem0Backend):
     """Wraps mem0.MemoryClient for Mem0 Platform (cloud API)."""
 
     def __init__(self, api_key: str):
+        import httpx
+
         from mem0 import MemoryClient
-        self._client = MemoryClient(api_key=api_key)
+
+        self._client = MemoryClient(
+            api_key=api_key,
+            client=httpx.Client(headers=_identity_headers(), timeout=300.0),
+        )
 
     def search(self, query: str, *, filters: dict, top_k: int = 10, rerank: bool = False) -> list[dict]:
         return _unwrap_results(self._client.search(query, filters=filters, top_k=top_k, rerank=rerank))
@@ -80,7 +101,11 @@ class SelfHostedBackend(Mem0Backend):
 
     def __init__(self, api_key: str, host: str, transport=None):
         import httpx
-        headers = {"Content-Type": "application/json", **({"X-API-Key": api_key} if api_key else {})}  # key omitted only for AUTH_DISABLED servers
+        headers = {
+            "Content-Type": "application/json",
+            **_identity_headers(),
+            **({"X-API-Key": api_key} if api_key else {}),
+        }  # key omitted only for AUTH_DISABLED servers
         # Connect-level retries keep one dropped SYN from counting toward the breaker. ``transport`` is injectable for tests.
         self._client = httpx.Client(base_url=host.rstrip("/"), headers=headers, timeout=30.0, transport=transport or httpx.HTTPTransport(retries=2))
         self._capture_timeout = httpx.Timeout(120.0, connect=30.0)

@@ -38,6 +38,7 @@ jobs:
       cli_python: ${{ steps.filter.outputs.cli_python }}
       cli_node: ${{ steps.filter.outputs.cli_node }}
       openclaw: ${{ steps.filter.outputs.openclaw }}
+      hermes_plugin_mem0: ${{ steps.filter.outputs.hermes_plugin_mem0 }}
       agent_plugins_python: ${{ steps.filter.outputs.agent_plugins_python }}
       agent_plugins_typescript: ${{ steps.filter.outputs.agent_plugins_typescript }}
       opencode_plugin: ${{ steps.filter.outputs.opencode_plugin }}
@@ -78,6 +79,10 @@ jobs:
               - 'integrations/openclaw/**'
               - 'integrations/agent-plugin-core/typescript/**'
               - '.github/workflows/openclaw-checks.yml'
+              - '.github/workflows/ci-gate.yml'
+            hermes_plugin_mem0:
+              - 'integrations/hermes-plugin-mem0/**'
+              - '.github/workflows/hermes-plugin-mem0-checks.yml'
               - '.github/workflows/ci-gate.yml'
             agent_plugins_python:
               - 'integrations/agent-plugin-core/**'
@@ -177,6 +182,13 @@ jobs:
     uses: ./.github/workflows/openclaw-checks.yml
     secrets: inherit
 
+  hermes-plugin-mem0:
+    name: Hermes plugin Mem0
+    needs: changes
+    if: needs.changes.outputs.hermes_plugin_mem0 == 'true'
+    uses: ./.github/workflows/hermes-plugin-mem0-checks.yml
+    secrets: inherit
+
   agent-plugins-python:
     name: Agent Plugins Python
     needs: changes
@@ -264,6 +276,7 @@ jobs:
       - cli-python
       - cli-node
       - openclaw
+      - hermes-plugin-mem0
       - agent-plugins-python
       - agent-plugins-typescript
       - opencode-plugin
