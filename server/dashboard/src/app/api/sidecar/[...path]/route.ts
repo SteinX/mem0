@@ -1,0 +1,154 @@
+import { cookies } from "next/headers";
+import { NextRequest } from "next/server";
+import { dashboardSessionRefreshCoordinator } from "@/lib/dashboard-session";
+import type { DashboardSessionRefreshResult } from "@/utils/dashboard-session-refresh";
+import { isAdminDashboardAccessToken } from "@/utils/dashboard-access-token";
+import { proxySidecarRequest } from "@/utils/sidecar-proxy";
+
+const COOKIE_NAME = "mem0_refresh_token";
+
+function shouldUseSecureCookie() {
+  const dashboardUrl = process.env.DASHBOARD_URL;
+  if (!dashboardUrl) {
+    return process.env.NODE_ENV === "production";
+  }
+
+  try {
+    return new URL(dashboardUrl).protocol === "https:";
+  } catch {
+    return process.env.NODE_ENV === "production";
+  }
+}
+
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: shouldUseSecureCookie(),
+  sameSite: "lax" as const,
+  path: "/",
+  maxAge: 30 * 24 * 60 * 60,
+};
+
+function getSidecarBaseUrl(): string | null {
+  const baseUrl = process.env.SIDECAR_INTERNAL_API_URL;
+  if (!baseUrl) {
+    return null;
+  }
+  return baseUrl.replace(/\/$/, "");
+}
+
+function getConfiguredProjectId(): string {
+  return (
+    process.env.SIDECAR_PROJECT_ID?.trim() ||
+    process.env.MEM0_SIDECAR_DEFAULT_PROJECT_ID?.trim() ||
+    "default"
+  );
+}
+
+function getConfiguredAppId(): string | undefined {
+  return process.env.SIDECAR_APP_ID?.trim() || undefined;
+}
+
+function isAuthDisabled() {
+  const value = process.env.AUTH_DISABLED?.toLowerCase();
+  return value === "1" || value === "true" || value === "yes" || value === "on";
+}
+
+type AuthenticatedDashboardSession = Extract<
+  DashboardSessionRefreshResult,
+  { status: "authenticated" }
+>;
+
+interface PendingRefreshCookie {
+  requestRefreshToken: string;
+  result: AuthenticatedDashboardSession;
+}
+
+async function validateDashboardSession(
+  onAuthenticated: (pending: PendingRefreshCookie) => void,
+): Promise<boolean> {
+  if (isAuthDisabled()) {
+    return true;
+  }
+
+  const cookieStore = await cookies();
+  const refreshToken = cookieStore.get(COOKIE_NAME)?.value;
+  if (!refreshToken) {
+    return false;
+  }
+
+  const result = await dashboardSessionRefreshCoordinator.refresh(refreshToken);
+  if (result.status === "unauthorized") {
+    cookieStore.delete(COOKIE_NAME);
+    return false;
+  }
+  if (result.status === "unavailable") {
+    throw new DashboardSessionUnavailableError();
+  }
+  if (!isAdminDashboardAccessToken(result.accessToken)) {
+    throw new DashboardSessionForbiddenError();
+  }
+
+  onAuthenticated({ requestRefreshToken: refreshToken, result });
+  return true;
+}
+
+class DashboardSessionUnavailableError extends Error {}
+class DashboardSessionForbiddenError extends Error {}
+
+async function proxy(
+  request: NextRequest,
+  context: { params: Promise<{ path: string[] }> },
+) {
+  const params = await context.params;
+  const upstreamPath = params.path.join("/");
+  const normalizedPath = `/${upstreamPath}`;
+  try {
+    let pendingRefreshCookie: PendingRefreshCookie | undefined;
+    const response = await proxySidecarRequest(request, normalizedPath, {
+      baseUrl: getSidecarBaseUrl(),
+      configuredProjectId: getConfiguredProjectId(),
+      configuredAppId: getConfiguredAppId(),
+      operatorApiKey: process.env.SIDECAR_INTERNAL_API_KEY,
+      validateDashboardSession: () =>
+        validateDashboardSession((pending) => {
+          pendingRefreshCookie = pending;
+        }),
+      fetchUpstream: fetch,
+    });
+    if (
+      pendingRefreshCookie &&
+      dashboardSessionRefreshCoordinator.shouldSetRefreshCookie(
+        pendingRefreshCookie.requestRefreshToken,
+        pendingRefreshCookie.result,
+      )
+    ) {
+      const cookieStore = await cookies();
+      cookieStore.set(
+        COOKIE_NAME,
+        pendingRefreshCookie.result.refreshToken,
+        COOKIE_OPTIONS,
+      );
+    }
+    return response;
+  } catch (error) {
+    if (error instanceof DashboardSessionUnavailableError) {
+      return Response.json(
+        { error: "Authentication service temporarily unavailable" },
+        { status: 503 },
+      );
+    }
+    if (error instanceof DashboardSessionForbiddenError) {
+      return Response.json(
+        { error: "Admin role required" },
+        { status: 403 },
+      );
+    }
+    throw error;
+  }
+}
+
+export const GET = proxy;
+export const POST = proxy;
+export const PUT = proxy;
+export const PATCH = proxy;
+export const DELETE = proxy;

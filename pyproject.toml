@@ -137,11 +137,6 @@ features = [
 [tool.hatch.envs.default]
 features = [
   "dev",
-]
-
-[tool.hatch.envs.default]
-features = [
-  "dev",
   "test",
   "vector-stores",
   "llms",

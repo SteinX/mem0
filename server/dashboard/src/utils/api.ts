@@ -1,4 +1,14 @@
 import axios, { AxiosError, AxiosInstance } from "axios";
+import {
+  dashboardSessionRequestRetryAction,
+  dashboardSessionRetryAction,
+  DashboardSessionClientResult,
+  requestDashboardSessionRefresh,
+} from "@/utils/dashboard-session-client";
+
+type RetryableAxiosConfig = NonNullable<AxiosError["config"]> & {
+  __mem0AuthRetry?: boolean;
+};
 
 let cachedToken: string | null = null;
 const LOGIN_PATH = "/login";
@@ -21,19 +31,12 @@ const redirectToLogin = () => {
   }
 };
 
-const refreshAccessToken = async () => {
-  const refreshResponse = await fetch("/api/auth/refresh", {
-    method: "POST",
-    credentials: "include",
-  });
-
-  if (!refreshResponse.ok) {
-    return null;
+const refreshAccessToken = async (): Promise<DashboardSessionClientResult> => {
+  const result = await requestDashboardSessionRefresh();
+  if (result.status === "authenticated") {
+    setAccessToken(result.accessToken);
   }
-
-  const data = await refreshResponse.json();
-  setAccessToken(data.access_token);
-  return data.access_token as string;
+  return result;
 };
 
 const createApi = (): AxiosInstance & {
@@ -59,20 +62,34 @@ const createApi = (): AxiosInstance & {
   api.interceptors.response.use(
     (response) => response,
     async (error: AxiosError<{ error?: string }>) => {
-      if (error.response?.status === 401) {
-        handleTokenError();
-
-        try {
-          const nextToken = await refreshAccessToken();
-          if (nextToken && error.config) {
-            error.config.headers = error.config.headers ?? {};
-            error.config.headers.Authorization = `Bearer ${nextToken}`;
-            return api.request(error.config);
-          }
-        } catch {}
-
+      const requestConfig = error.config as RetryableAxiosConfig | undefined;
+      const retryAction = dashboardSessionRequestRetryAction(
+        error.response?.status,
+        requestConfig,
+      );
+      if (retryAction === "logout") {
         handleTokenError();
         redirectToLogin();
+        return Promise.reject(error);
+      }
+      if (retryAction === "refresh" && requestConfig) {
+        handleTokenError();
+        const result = await refreshAccessToken();
+
+        if (result.status === "authenticated") {
+          requestConfig.__mem0AuthRetry = true;
+          requestConfig.headers = requestConfig.headers ?? {};
+          requestConfig.headers.Authorization = `Bearer ${result.accessToken}`;
+          return api.request(requestConfig);
+        }
+        if (result.status === "unauthorized") {
+          handleTokenError();
+          redirectToLogin();
+        }
+        if (result.status === "unavailable") {
+          return Promise.reject(error);
+        }
+        return Promise.reject(error);
       }
 
       if (error.response?.data?.error) {
@@ -84,16 +101,30 @@ const createApi = (): AxiosInstance & {
   );
 
   const postStream = async (url: string, data: unknown): Promise<Response> => {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${url}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: cachedToken ? `Bearer ${cachedToken}` : "",
-      },
-      body: JSON.stringify(data),
-    });
+    const send = () =>
+      fetch(`${process.env.NEXT_PUBLIC_API_URL}${url}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: cachedToken ? `Bearer ${cachedToken}` : "",
+        },
+        body: JSON.stringify(data),
+      });
 
+    let response = await send();
     if (response.status === 401) {
+      handleTokenError();
+      const result = await refreshAccessToken();
+      if (result.status === "authenticated") {
+        response = await send();
+      } else if (result.status === "unauthorized") {
+        redirectToLogin();
+        throw new Error("Unauthorized");
+      } else {
+        throw new Error("Authentication temporarily unavailable");
+      }
+    }
+    if (dashboardSessionRetryAction(response.status, true) === "logout") {
       handleTokenError();
       redirectToLogin();
       throw new Error("Unauthorized");
