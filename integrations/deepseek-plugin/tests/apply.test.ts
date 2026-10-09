@@ -130,6 +130,7 @@ describe("Harness lifecycle", () => {
     expect(mockSearch).toHaveBeenCalledWith("What do I drink?", {
       filters: { user_id: "u" },
       topK: 5,
+      source: "DEEPSEEK_HARNESS",
     });
     expect(result).toMatchObject({
       contexts: [{ name: "mem0:recall", text: expect.stringContaining("Likes tea") }],
@@ -205,6 +206,7 @@ describe("search_memory tool", () => {
     expect(mockSearch).toHaveBeenCalledWith("drink", {
       filters: { user_id: "u" },
       topK: 10,
+      source: "DEEPSEEK_HARNESS",
     });
   });
 
@@ -220,6 +222,7 @@ describe("search_memory tool", () => {
     expect(mockSearch).toHaveBeenCalledWith("x", {
       filters: { user_id: "u" },
       topK: 3,
+      source: "DEEPSEEK_HARNESS",
     });
   });
 
@@ -238,6 +241,7 @@ describe("search_memory tool", () => {
         run_id: "run-9",
       },
       topK: 10,
+      source: "DEEPSEEK_HARNESS",
     });
   });
 
@@ -349,7 +353,11 @@ describe("tool user ownership", () => {
     const tools = applyAndCollect({ apiKey: "k", userId: "u" });
     await tools.get("search_memory")?.execute({ query: "x", userId: "other", agentId: "shared" }, {});
     await tools.get("add_memory")?.execute({ text: "x", userId: "other", agentId: "shared" }, {});
-    expect(mockSearch).toHaveBeenCalledWith("x", { filters: { user_id: "u" }, topK: 10 });
+    expect(mockSearch).toHaveBeenCalledWith("x", {
+      filters: { user_id: "u" },
+      topK: 10,
+      source: "DEEPSEEK_HARNESS",
+    });
     expect(mockAdd).toHaveBeenCalledWith([{ role: "user", content: "x" }], { userId: "u", source: "DEEPSEEK_HARNESS" });
   });
 });
