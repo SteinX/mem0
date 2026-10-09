@@ -97,6 +97,7 @@ export function apply(ctx: Context, config: Config): void {
     apiKey,
     ...(host ? { host } : {}),
   });
+  client.headers["X-Mem0-Source"] ??= SOURCE;
   const toolLifecycle = createMemoryLifecycle();
   const sessionStates = new WeakMap<object, SessionState>();
   const stateFor = (session: object): SessionState => {
@@ -136,7 +137,6 @@ export function apply(ctx: Context, config: Config): void {
           const result = await client.search(query, {
             filters: resolveSearchFilters({}, userId),
             topK: AUTO_RECALL_LIMIT,
-            source: SOURCE,
           });
           captureEvent("deepseek.recall.auto", {
             success: true,
@@ -212,7 +212,6 @@ export function apply(ctx: Context, config: Config): void {
           const { results } = await client.search(safeQuery, {
             filters,
             topK,
-            source: SOURCE,
           });
           captureEvent(
             "deepseek.tool.search_memory",

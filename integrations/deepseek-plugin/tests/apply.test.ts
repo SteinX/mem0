@@ -4,10 +4,16 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 const mockSearch = vi.fn();
 const mockAdd = vi.fn();
 const mockClientConfig = vi.fn();
+const mockClientHeaders = vi.fn();
+let outerSource: string | undefined;
 vi.mock("mem0ai", () => ({
   MemoryClient: class {
+    headers: Record<string, string> = outerSource === undefined
+      ? {}
+      : { "X-Mem0-Source": outerSource };
     constructor(config: unknown) {
       mockClientConfig(config);
+      mockClientHeaders(this.headers);
     }
     search = mockSearch;
     add = mockAdd;
@@ -62,6 +68,8 @@ beforeEach(() => {
   mockSearch.mockReset();
   mockAdd.mockReset();
   mockClientConfig.mockReset();
+  mockClientHeaders.mockReset();
+  outerSource = undefined;
 });
 
 afterEach(() => {
@@ -72,6 +80,20 @@ afterEach(() => {
 });
 
 describe("apply() config validation", () => {
+  it("preserves an outer SDK source while calling the search tool", async () => {
+    outerSource = "OUTER_SURFACE";
+    mockSearch.mockResolvedValue({ results: [] });
+    const tools = applyAndCollect({ apiKey: "k", userId: "u", autoRecall: false });
+
+    await tools.get("search_memory")?.execute({ query: "fixture query" }, {});
+
+    expect(mockSearch).toHaveBeenCalledWith("fixture query", {
+      filters: { user_id: "u" },
+      topK: 10,
+    });
+    expect(mockClientHeaders.mock.calls[0]?.[0]["X-Mem0-Source"]).toBe("OUTER_SURFACE");
+  });
+
   it("throws when no apiKey is set and MEM0_API_KEY is absent", () => {
     delete process.env.MEM0_API_KEY;
     expect(() => applyAndCollect({ userId: "u" } as Config)).toThrow(/apiKey|MEM0_API_KEY/);
@@ -130,8 +152,8 @@ describe("Harness lifecycle", () => {
     expect(mockSearch).toHaveBeenCalledWith("What do I drink?", {
       filters: { user_id: "u" },
       topK: 5,
-      source: "DEEPSEEK_HARNESS",
     });
+    expect(mockClientHeaders.mock.calls[0]?.[0]["X-Mem0-Source"]).toBe("DEEPSEEK_HARNESS");
     expect(result).toMatchObject({
       contexts: [{ name: "mem0:recall", text: expect.stringContaining("Likes tea") }],
     });
@@ -206,8 +228,8 @@ describe("search_memory tool", () => {
     expect(mockSearch).toHaveBeenCalledWith("drink", {
       filters: { user_id: "u" },
       topK: 10,
-      source: "DEEPSEEK_HARNESS",
     });
+    expect(mockClientHeaders.mock.calls[0]?.[0]["X-Mem0-Source"]).toBe("DEEPSEEK_HARNESS");
   });
 
   it("keeps the configured user boundary when tool input includes a userId", async () => {
@@ -222,7 +244,6 @@ describe("search_memory tool", () => {
     expect(mockSearch).toHaveBeenCalledWith("x", {
       filters: { user_id: "u" },
       topK: 3,
-      source: "DEEPSEEK_HARNESS",
     });
   });
 
@@ -241,7 +262,6 @@ describe("search_memory tool", () => {
         run_id: "run-9",
       },
       topK: 10,
-      source: "DEEPSEEK_HARNESS",
     });
   });
 
@@ -356,7 +376,6 @@ describe("tool user ownership", () => {
     expect(mockSearch).toHaveBeenCalledWith("x", {
       filters: { user_id: "u" },
       topK: 10,
-      source: "DEEPSEEK_HARNESS",
     });
     expect(mockAdd).toHaveBeenCalledWith([{ role: "user", content: "x" }], { userId: "u", source: "DEEPSEEK_HARNESS" });
   });

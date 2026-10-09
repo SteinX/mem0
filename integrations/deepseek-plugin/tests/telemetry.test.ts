@@ -7,6 +7,7 @@ const mockSearch = vi.fn();
 const mockAdd = vi.fn();
 vi.mock("mem0ai", () => ({
   MemoryClient: class {
+    headers: Record<string, string> = {};
     telemetryId = "dev@example.com";
     search = mockSearch;
     add = mockAdd;
