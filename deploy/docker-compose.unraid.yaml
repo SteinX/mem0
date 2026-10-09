@@ -1,0 +1,263 @@
+name: ${COMPOSE_PROJECT_NAME:-mem0-dev}
+
+services:
+  postgres:
+    image: ${MEM0_POSTGRES_IMAGE:-pgvector/pgvector:pg17}
+    restart: unless-stopped
+    shm_size: "128mb"
+    networks:
+      - mem0_network
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in deploy/.env}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -q -d postgres -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - ${MEM0_POSTGRES_HOST_DIR:-/mnt/user/appdata/mem0/postgres-data}:/var/lib/postgresql/data
+      - ${MEM0_SERVER_HOST_DIR:-/mnt/user/appdata/mem0/upstream/server}/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh:ro
+    ports:
+      - "${MEM0_POSTGRES_HOST_PORT:-38432}:5432"
+
+  mem0:
+    image: ${MEM0_SERVER_IMAGE:-ghcr.io/steinx/mem0:v2.2.1-steinx.1}
+    restart: unless-stopped
+    mem_limit: ${MEM0_CORE_MEMORY_LIMIT:-6g}
+    ports:
+      - "127.0.0.1:${MEM0_CORE_ROLLBACK_HOST_PORT:-38890}:8000"
+    networks:
+      - mem0_network
+      - agent-shared
+    volumes:
+      - ${MEM0_HISTORY_HOST_DIR:-/mnt/user/appdata/mem0/history}:/app/history
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      sh -c "alembic upgrade head && exec uvicorn main:app --host 0.0.0.0 --port 8000"
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+      PYTHONPATH: ""
+      DASHBOARD_URL: ${MEM0_DASHBOARD_URL:-http://localhost:33000}
+      APP_DB_NAME: ${APP_DB_NAME:-mem0_app}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in deploy/.env}
+      ADMIN_API_KEY: ${ADMIN_API_KEY:?Set ADMIN_API_KEY in deploy/.env}
+      AUTH_DISABLED: ${AUTH_DISABLED:-false}
+      MEM0_TELEMETRY: ${MEM0_TELEMETRY:-false}
+      REQUEST_LOG_RETENTION_DAYS: ${REQUEST_LOG_RETENTION_DAYS:-30}
+      MEM0_OSS_LIST_FETCH_LIMIT: ${MEM0_OSS_LIST_FETCH_LIMIT:-5000}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?Set OPENAI_API_KEY in deploy/.env}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in deploy/.env}
+      POSTGRES_COLLECTION_NAME: ${POSTGRES_COLLECTION_NAME:-memories}
+      MEM0_DEFAULT_LLM_MODEL: ${MEM0_DEFAULT_LLM_MODEL:-gpt-5.4-mini}
+      MEM0_DEFAULT_EMBEDDER_MODEL: ${MEM0_DEFAULT_EMBEDDER_MODEL:-bge-m3}
+
+  mem0-dashboard:
+    image: ${MEM0_DASHBOARD_IMAGE:-ghcr.io/steinx/mem0-dashboard-sidecar:v0.3.11}
+    restart: unless-stopped
+    ports:
+      - "${MEM0_DASHBOARD_HOST_PORT:-33000}:3000"
+    networks:
+      - mem0_network
+    environment:
+      DASHBOARD_URL: ${MEM0_DASHBOARD_URL:-http://localhost:33000}
+      NEXT_PUBLIC_API_URL: ${MEM0_PUBLIC_API_URL:-http://localhost:38888}
+      API_INTERNAL_URL: http://mem0:8000
+      NEXT_PUBLIC_INSTANCE_NAME: ${MEM0_INSTANCE_NAME:-Mem0}
+      NEXT_PUBLIC_MEM0_OSS_LIST_FETCH_LIMIT: ${MEM0_OSS_LIST_FETCH_LIMIT:-5000}
+      SIDECAR_INTERNAL_API_URL: ${SIDECAR_INTERNAL_API_URL:-http://mem0-platform-sidecar:8765}
+      SIDECAR_INTERNAL_API_KEY: ${ADMIN_API_KEY:?Set ADMIN_API_KEY in deploy/.env}
+      SIDECAR_PROJECT_ID: ${SIDECAR_PROJECT_ID:-default}
+      SIDECAR_APP_ID: "${SIDECAR_APP_ID:-*}"
+      AUTH_DISABLED: ${AUTH_DISABLED:-false}
+    depends_on:
+      mem0:
+        condition: service_started
+      mem0-platform-sidecar:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  mem0-oss-mcp:
+    build:
+      context: ${MEM0_MCP_BUILD_CONTEXT:-../mem0-oss-mcp}
+    image: ${MEM0_MCP_IMAGE:-ghcr.io/steinx/mem0-oss-mcp:0.1.5}
+    container_name: mem0-oss-mcp
+    restart: unless-stopped
+    stop_signal: SIGINT
+    ports:
+      - "127.0.0.1:${MEM0_MCP_ROLLBACK_HOST_PORT:-38083}:8080"
+    networks:
+      - mem0_network
+    depends_on:
+      mem0:
+        condition: service_started
+      mem0-platform-sidecar:
+        condition: service_healthy
+    environment:
+      MEM0_OSS_BASE_URL: http://mem0:8000
+      MEM0_OSS_API_KEY: ${ADMIN_API_KEY:?Set ADMIN_API_KEY in deploy/.env}
+      MEM0_OSS_MCP_HOST: 0.0.0.0
+      MEM0_OSS_MCP_PORT: "8080"
+      MEM0_OSS_MCP_AUTH_MODE: ${MEM0_OSS_MCP_AUTH_MODE:-static}
+      MEM0_OSS_MCP_CLIENT_AUTH_URL: ${MEM0_OSS_MCP_CLIENT_AUTH_URL:-http://mem0:8000/auth/me}
+      MEM0_OSS_MCP_CLIENT_AUTH_TIMEOUT_SECONDS: ${MEM0_OSS_MCP_CLIENT_AUTH_TIMEOUT_SECONDS:-5}
+      MEM0_OSS_MCP_TOKEN: ${MEM0_OSS_MCP_TOKEN:-}
+      MEM0_OSS_DEFAULT_USER_ID: ${MEM0_OSS_DEFAULT_USER_ID:-codex}
+      MEM0_OSS_DEFAULT_APP_ID: ${MEM0_OSS_DEFAULT_APP_ID:-codex}
+      MEM0_OSS_TIMEOUT: ${MEM0_OSS_TIMEOUT:-30}
+      MEM0_OSS_LIST_FETCH_LIMIT: ${MEM0_OSS_LIST_FETCH_LIMIT:-5000}
+      MEM0_OSS_BACKEND_LIST_FETCH_LIMIT: ${MEM0_OSS_LIST_FETCH_LIMIT:-5000}
+      MEM0_OSS_BACKEND_LIST_RETRY_LIMIT: ${MEM0_OSS_BACKEND_LIST_RETRY_LIMIT:-1000}
+      MEM0_SIDECAR_BASE_URL: ${MEM0_SIDECAR_BASE_URL:-http://mem0-platform-sidecar:8765}
+      MEM0_SIDECAR_API_KEY: ${ADMIN_API_KEY:?Set ADMIN_API_KEY in deploy/.env}
+      MEM0_SIDECAR_PROJECT_ID: ${SIDECAR_PROJECT_ID:-default}
+      MEM0_SIDECAR_REQUIRED: ${MEM0_SIDECAR_REQUIRED:-true}
+      MEM0_SIDECAR_INSTANCE_ID: ${MEM0_SIDECAR_INSTANCE_ID:-mem0-oss-mcp}
+      MEM0_SIDECAR_HEARTBEAT_INTERVAL_SECONDS: ${MEM0_SIDECAR_HEARTBEAT_INTERVAL_SECONDS:-300}
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=5).read()",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  mem0-platform-sidecar:
+    image: ${MEM0_SIDECAR_IMAGE:-ghcr.io/steinx/mem0-platform-sidecar:v0.3.11}
+    container_name: mem0-platform-sidecar
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MEM0_SIDECAR_ROLLBACK_HOST_PORT:-38765}:8765"
+    networks:
+      - mem0_network
+    volumes:
+      - ${MEM0_SIDECAR_HOST_DIR:-/mnt/user/appdata/mem0/sidecar-data}:/data
+    depends_on:
+      mem0:
+        condition: service_started
+    environment:
+      MEM0_SIDECAR_DATABASE_URL: ${MEM0_SIDECAR_DATABASE_URL:-sqlite:////data/mem0_sidecar.sqlite3}
+      MEM0_SIDECAR_MEM0_BASE_URL: ${MEM0_SIDECAR_MEM0_BASE_URL:-http://mem0:8000}
+      MEM0_SIDECAR_MEM0_API_KEY: ${ADMIN_API_KEY:?Set ADMIN_API_KEY in deploy/.env}
+      MEM0_SIDECAR_MEM0_API_KEY_HEADER_NAME: ${MEM0_SIDECAR_MEM0_API_KEY_HEADER_NAME:-X-API-Key}
+      MEM0_SIDECAR_MEM0_API_KEY_PREFIX: ${MEM0_SIDECAR_MEM0_API_KEY_PREFIX:-}
+      MEM0_SIDECAR_MEM0_EXTRA_HEADERS: ${MEM0_SIDECAR_MEM0_EXTRA_HEADERS:-{}}
+      MEM0_SIDECAR_MEM0_REQUEST_TIMEOUT_SECONDS: ${MEM0_SIDECAR_MEM0_REQUEST_TIMEOUT_SECONDS:-30}
+      MEM0_SIDECAR_MEM0_CONNECT_TIMEOUT_SECONDS: ${MEM0_SIDECAR_MEM0_CONNECT_TIMEOUT_SECONDS:-30}
+      MEM0_SIDECAR_MEM0_VERIFY_TLS: ${MEM0_SIDECAR_MEM0_VERIFY_TLS:-true}
+      MEM0_SIDECAR_MEM0_CA_BUNDLE: ${MEM0_SIDECAR_MEM0_CA_BUNDLE:-}
+      MEM0_SIDECAR_MEM0_MEMORIES_PATH: ${MEM0_SIDECAR_MEM0_MEMORIES_PATH:-/memories}
+      MEM0_SIDECAR_MEM0_SEARCH_PATH: ${MEM0_SIDECAR_MEM0_SEARCH_PATH:-/search}
+      MEM0_SIDECAR_DEFAULT_PROJECT_ID: ${SIDECAR_PROJECT_ID:-default}
+      MEM0_SIDECAR_CLIENT_AUTH_ENABLED: ${MEM0_SIDECAR_CLIENT_AUTH_ENABLED:-true}
+      MEM0_SIDECAR_CLIENT_AUTH_PATH: ${MEM0_SIDECAR_CLIENT_AUTH_PATH:-/auth/me}
+      MEM0_SIDECAR_CLIENT_AUTH_TIMEOUT_SECONDS: ${MEM0_SIDECAR_CLIENT_AUTH_TIMEOUT_SECONDS:-5}
+      MEM0_SIDECAR_CLIENT_AUTH_ALLOW_BOOTSTRAP_ADMIN: ${MEM0_SIDECAR_CLIENT_AUTH_ALLOW_BOOTSTRAP_ADMIN:-true}
+      MEM0_SIDECAR_ALLOW_ADOPT_UNSCOPED: ${MEM0_SIDECAR_ALLOW_ADOPT_UNSCOPED:-false}
+      MEM0_SIDECAR_DIRECT_WRITE_SYNC_ENABLED: ${MEM0_SIDECAR_DIRECT_WRITE_SYNC_ENABLED:-true}
+      MEM0_SIDECAR_DIRECT_WRITE_SYNC_INTERVAL_SECONDS: ${MEM0_SIDECAR_DIRECT_WRITE_SYNC_INTERVAL_SECONDS:-60}
+      MEM0_SIDECAR_DIRECT_WRITE_SYNC_SCAN_LIMIT: ${MEM0_SIDECAR_DIRECT_WRITE_SYNC_SCAN_LIMIT:-5000}
+      MEM0_SIDECAR_DIRECT_WRITE_SYNC_LEGACY_CAP: ${MEM0_SIDECAR_DIRECT_WRITE_SYNC_LEGACY_CAP:-1000}
+      MEM0_SIDECAR_DIRECT_WRITE_SYNC_DEFAULT_APP_ID: ${MEM0_SIDECAR_DIRECT_WRITE_SYNC_DEFAULT_APP_ID:-default}
+      MEM0_SIDECAR_CONSOLIDATION_ENABLED: ${MEM0_SIDECAR_CONSOLIDATION_ENABLED:-false}
+      MEM0_SIDECAR_CONSOLIDATION_HARD_DELETE_ENABLED: ${MEM0_SIDECAR_CONSOLIDATION_HARD_DELETE_ENABLED:-false}
+      MEM0_SIDECAR_CONSOLIDATION_SCHEDULER_INTERVAL_SECONDS: ${MEM0_SIDECAR_CONSOLIDATION_SCHEDULER_INTERVAL_SECONDS:-300}
+      MEM0_SIDECAR_CONSOLIDATION_JOB_LEASE_SECONDS: ${MEM0_SIDECAR_CONSOLIDATION_JOB_LEASE_SECONDS:-300}
+      MEM0_SIDECAR_CONSOLIDATION_BRIDGE_ROUTING_REQUIRED: ${MEM0_SIDECAR_CONSOLIDATION_BRIDGE_ROUTING_REQUIRED:-true}
+      MEM0_SIDECAR_LOG_LEVEL: ${MEM0_SIDECAR_LOG_LEVEL:-INFO}
+      MEM0_SIDECAR_LOG_FORMAT: ${MEM0_SIDECAR_LOG_FORMAT:-json}
+      MEM0_SIDECAR_REQUEST_ID_HEADER: ${MEM0_SIDECAR_REQUEST_ID_HEADER:-X-Request-ID}
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/readyz', timeout=5).read()",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  mem0-ingress:
+    build:
+      context: ./ingress
+      extra_hosts:
+        - "mem0=127.0.0.1"
+        - "mem0-platform-sidecar=127.0.0.1"
+        - "mem0-oss-mcp=127.0.0.1"
+    image: ${MEM0_INGRESS_IMAGE:-mem0-ingress:canary}
+    restart: unless-stopped
+    ports:
+      - "${MEM0_API_HOST_PORT:-38888}:8080"
+      - "${MEM0_MCP_HOST_PORT:-38080}:8081"
+      - "127.0.0.1:${MEM0_INGRESS_CANARY_API_HOST_PORT:-38889}:8080"
+      - "127.0.0.1:${MEM0_INGRESS_CANARY_MCP_HOST_PORT:-38082}:8081"
+    networks:
+      - mem0_network
+    depends_on:
+      mem0:
+        condition: service_started
+      mem0-platform-sidecar:
+        condition: service_healthy
+      mem0-oss-mcp:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  mem0-canary-check:
+    profiles: ["tools"]
+    build:
+      context: .
+      dockerfile: canary-check/Dockerfile
+    image: ${MEM0_CANARY_CHECK_IMAGE:-mem0-canary-check:local}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - mem0_network
+    volumes:
+      - ${MEM0_LEGACY_MCP_TOKEN_FILE_HOST:-/dev/null}:/run/secrets/mem0_legacy_mcp_token:ro
+    depends_on:
+      mem0-ingress:
+        condition: service_healthy
+    environment:
+      MEM0_PUBLIC_BASE_URL: http://mem0-ingress:8080
+      MEM0_PUBLIC_MCP_URL: http://mem0-ingress:8081/mcp
+      MEM0_OPERATOR_SIDECAR_URL: http://mem0-platform-sidecar:8765
+      ADMIN_API_KEY: ${ADMIN_API_KEY:?Set ADMIN_API_KEY in deploy/.env}
+      MEM0_OSS_MCP_TOKEN: ${MEM0_CANARY_MCP_TOKEN:-}
+      MEM0_CANARY_EXPECTED_CREDENTIAL_KIND: ${MEM0_CANARY_EXPECTED_CREDENTIAL_KIND:-core_api_key}
+      MEM0_EXPECT_LEGACY_MCP_REJECTED: ${MEM0_EXPECT_LEGACY_MCP_REJECTED:-false}
+      MEM0_LEGACY_MCP_TOKEN_FILE: /run/secrets/mem0_legacy_mcp_token
+      SIDECAR_PROJECT_ID: ${SIDECAR_PROJECT_ID:-default}
+
+networks:
+  mem0_network:
+    name: ${MEM0_NETWORK_NAME:-mem0-dev_mem0_network}
+    driver: bridge
+
+  agent-shared:
+    external: true
+    name: ${AGENT_SHARED_NETWORK:-agent-shared}

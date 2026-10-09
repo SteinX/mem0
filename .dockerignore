@@ -1,0 +1,16 @@
+.git
+.venv
+**/node_modules
+**/.next
+**/__pycache__
+**/.pytest_cache
+**/.env
+**/.env.local
+**/.env.*.local
+integrations
+openmemory
+docs
+examples
+evaluation
+tests
+mem0-ts

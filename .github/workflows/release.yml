@@ -26,6 +26,7 @@ permissions:
 
 jobs:
   route:
+    if: github.repository == 'mem0ai/mem0'
     name: Route ${{ github.event.release.tag_name }} to its CD pipeline
     runs-on: ubuntu-latest
     steps:
