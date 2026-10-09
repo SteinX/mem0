@@ -2324,7 +2324,6 @@ def search_memories(
         filters = {"AND": [filters, {"run_id": run_id}]}
     payload = {
         "query": query,
-        "app_id": repo.app_id,
         "filters": filters,
         "top_k": result_limit,
         "rerank": False,

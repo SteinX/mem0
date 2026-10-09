@@ -9,6 +9,7 @@ import sys
 import time
 from pathlib import Path
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 import pytest
 
@@ -2153,6 +2154,8 @@ def test_search_is_repo_scoped_and_does_not_reinject_seen_results(
 
     def fake_request(url, key, payload, timeout):
         captured_payloads.append(payload)
+        if payload.keys() & {"app_id", "user_id", "agent_id", "run_id"}:
+            raise HTTPError(url, 400, "Use entity filters", None, None)
         return (
             [
                 {
@@ -2201,7 +2204,9 @@ def test_search_is_repo_scoped_and_does_not_reinject_seen_results(
     assert "1. The ODS serializer is in src/ods.py." in rendered
     assert second_result.memories == []
     assert second_result.already_shown_count == 3
-    assert captured_payloads[0]["app_id"] == "code-example"
+    assert not captured_payloads[0].keys() & {
+        "app_id", "user_id", "agent_id", "run_id"
+    }
     assert captured_payloads[0]["filters"] == {
         "OR": [
             {"AND": [{"agent_id": "code-example"}, {"app_id": "code-example"}]},
@@ -4174,7 +4179,13 @@ def test_search_payload_uses_root_app_id_not_directory(isolated_env, monkeypatch
         memory_core.search_memories(store, _payments("services/billing"), "s1", "Stripe config")
 
     payload = request.call_args.args[2]
-    assert payload["app_id"] == "payments-api"
+    assert "app_id" not in payload
+    assert payload["filters"] == {
+        "OR": [
+            {"AND": [{"agent_id": "payments-api"}, {"app_id": "payments-api"}]},
+            {"AND": [{"user_id": "test-user"}, {"app_id": "payments-api"}]},
+        ]
+    }
     store.close()
 
 
