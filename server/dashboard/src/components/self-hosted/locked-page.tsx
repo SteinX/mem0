@@ -44,13 +44,13 @@ export function LockedPage({
               This feature is available in Mem0 Cloud and Enterprise.
             </p>
           </div>
-          <div className="flex gap-3">
-            <Button variant="default" asChild>
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+            <Button variant="default" className="w-full sm:w-auto" asChild>
               <a href={cloudUrl} target="_blank" rel="noopener noreferrer">
                 Start free on Cloud
               </a>
             </Button>
-            <Button variant="outline" asChild>
+            <Button variant="outline" className="w-full sm:w-auto" asChild>
               <a href={salesUrl} target="_blank" rel="noopener noreferrer">
                 Talk to sales
               </a>
