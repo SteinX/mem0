@@ -1,0 +1,578 @@
+const METHODS_WITH_BODY = new Set(["POST", "PUT", "PATCH"]);
+const MAX_SCOPED_JSON_BODY_BYTES = 65_536;
+
+type SidecarProxyOptions = {
+  baseUrl: string | null;
+  configuredProjectId: string;
+  configuredAppId?: string;
+  operatorApiKey?: string;
+  validateDashboardSession: () => Promise<boolean>;
+  fetchUpstream?: typeof fetch;
+};
+
+function jsonError(message: string, status: number): Response {
+  return Response.json({ error: message }, { status });
+}
+
+function isProjectCategoriesPath(method: string, path: string): boolean {
+  return (
+    (method === "GET" || method === "POST" || method === "PUT") &&
+    /^\/v1\/projects\/[^/]+\/categories$/.test(path)
+  );
+}
+
+function isProjectCategoryItemPath(method: string, path: string): boolean {
+  return (
+    (method === "PATCH" || method === "DELETE") &&
+    /^\/v1\/projects\/[^/]+\/categories\/[^/]+$/.test(path)
+  );
+}
+
+function isExportPath(method: string, path: string): boolean {
+  if ((method === "GET" || method === "POST") && path === "/v1/exports") {
+    return true;
+  }
+  return method === "GET" && exportItem(path) !== null;
+}
+
+function isMemoryQueryPath(method: string, path: string): boolean {
+  return method === "POST" && path === "/v1/memories/query";
+}
+
+function canonicalResourceId(
+  encodedId: string,
+  reservedIds: ReadonlySet<string>,
+  allowLiteralPercent = false,
+): string | null {
+  if (!encodedId) {
+    return null;
+  }
+
+  let resourceId: string;
+  try {
+    resourceId = decodeURIComponent(encodedId);
+  } catch {
+    return null;
+  }
+
+  const hasTraversalSegment = resourceId
+    .split(/[\\/]/)
+    .some((segment) => segment === "." || segment === "..");
+  if (
+    reservedIds.has(resourceId) ||
+    hasTraversalSegment ||
+    /[\u0000-\u001f\u007f]/.test(resourceId) ||
+    (!allowLiteralPercent && resourceId.includes("%"))
+  ) {
+    return null;
+  }
+  return encodeURIComponent(encodeURIComponent(resourceId));
+}
+
+function canonicalMemoryId(encodedId: string): string | null {
+  return canonicalResourceId(encodedId, new Set(["query"]), true);
+}
+
+function exportItem(
+  path: string,
+): { exportId: string; download: boolean } | null {
+  const match = path.match(/^\/v1\/exports\/([^/]+)(\/download)?$/);
+  if (!match) {
+    return null;
+  }
+  const exportId = canonicalResourceId(match[1], new Set());
+  return exportId === null
+    ? null
+    : { exportId, download: match[2] !== undefined };
+}
+
+function memoryItemId(path: string): string | null {
+  const match = path.match(/^\/v1\/memories\/([^/]+)$/);
+  return match && match[1] !== "query" ? canonicalMemoryId(match[1]) : null;
+}
+
+function memoryHistoryId(path: string): string | null {
+  const match = path.match(/^\/v1\/memories\/([^/]+)\/history$/);
+  return match ? canonicalMemoryId(match[1]) : null;
+}
+
+function isMemoryItemPath(method: string, path: string): boolean {
+  return (
+    (method === "GET" || method === "PATCH" || method === "DELETE") &&
+    memoryItemId(path) !== null
+  );
+}
+
+function isMemoryHistoryPath(method: string, path: string): boolean {
+  return method === "GET" && memoryHistoryId(path) !== null;
+}
+
+function isMemoryPath(method: string, path: string): boolean {
+  return (
+    isMemoryQueryPath(method, path) ||
+    isMemoryItemPath(method, path) ||
+    isMemoryHistoryPath(method, path)
+  );
+}
+
+function isEntityQueryPath(method: string, path: string): boolean {
+  return method === "POST" && path === "/v1/entities/query";
+}
+
+function canonicalEntitySegment(encodedSegment: string): string | null {
+  if (!encodedSegment) {
+    return null;
+  }
+
+  let segment: string;
+  try {
+    segment = decodeURIComponent(encodedSegment);
+  } catch {
+    return null;
+  }
+
+  const hasTraversalSegment = segment
+    .split(/[\\/]/)
+    .some((part) => part === "." || part === "..");
+  if (hasTraversalSegment || /[\u0000-\u001f\u007f]/.test(segment)) {
+    return null;
+  }
+  return encodeURIComponent(segment);
+}
+
+function entityItemSegments(
+  path: string,
+): { entityType: string; entityId: string } | null {
+  const match = path.match(/^\/v1\/entities\/([^/]+)\/([^/]+)$/);
+  if (!match) {
+    return null;
+  }
+  const entityType = canonicalEntitySegment(match[1]);
+  const entityId = canonicalEntitySegment(match[2]);
+  return entityType !== null && entityId !== null
+    ? { entityType, entityId }
+    : null;
+}
+
+function isEntityItemPath(method: string, path: string): boolean {
+  return (
+    (method === "GET" || method === "DELETE") &&
+    entityItemSegments(path) !== null
+  );
+}
+
+function isEntityPath(method: string, path: string): boolean {
+  return isEntityQueryPath(method, path) || isEntityItemPath(method, path);
+}
+
+function isEventQueryPath(method: string, path: string): boolean {
+  return method === "POST" && path === "/v1/events/query";
+}
+
+function eventItemId(path: string): string | null {
+  const match = path.match(/^\/v1\/event\/([^/]+)$/);
+  return match ? canonicalResourceId(match[1], new Set(["query"])) : null;
+}
+
+function isEventItemPath(method: string, path: string): boolean {
+  return method === "GET" && eventItemId(path) !== null;
+}
+
+function isEventPath(method: string, path: string): boolean {
+  return isEventQueryPath(method, path) || isEventItemPath(method, path);
+}
+
+function sidecarPathFromRequestUrl(
+  request: Request,
+  normalizedPath: string,
+): string {
+  if (
+    !normalizedPath.startsWith("/v1/memories/") &&
+    !normalizedPath.startsWith("/v1/event/") &&
+    !normalizedPath.startsWith("/v1/entities/") &&
+    !normalizedPath.startsWith("/v1/exports/")
+  ) {
+    return normalizedPath;
+  }
+
+  const pathname = new URL(request.url).pathname;
+  const proxyPrefix = "/api/sidecar";
+  const prefixIndex = pathname.lastIndexOf(proxyPrefix);
+  if (prefixIndex === -1) {
+    return normalizedPath;
+  }
+  const requestPath = pathname.slice(prefixIndex + proxyPrefix.length);
+  return requestPath.startsWith("/v1/memories/") ||
+    requestPath.startsWith("/v1/event/") ||
+    requestPath.startsWith("/v1/entities/") ||
+    requestPath.startsWith("/v1/exports/")
+    ? requestPath
+    : normalizedPath;
+}
+
+function isAllowedSidecarRequest(method: string, path: string): boolean {
+  return (
+    isProjectCategoriesPath(method, path) ||
+    isProjectCategoryItemPath(method, path) ||
+    isExportPath(method, path) ||
+    isMemoryPath(method, path) ||
+    isEntityPath(method, path) ||
+    isEventPath(method, path)
+  );
+}
+
+function scopedSidecarPath(
+  method: string,
+  path: string,
+  configuredProjectId: string,
+): string | null {
+  if (!isAllowedSidecarRequest(method, path)) {
+    return null;
+  }
+  if (isProjectCategoriesPath(method, path)) {
+    return `/v1/projects/${encodeURIComponent(configuredProjectId)}/categories`;
+  }
+  const categoryItemMatch = path.match(
+    /^\/v1\/projects\/[^/]+\/categories\/([^/]+)$/,
+  );
+  if (categoryItemMatch) {
+    const categoryId = canonicalEntitySegment(categoryItemMatch[1]);
+    return categoryId === null
+      ? null
+      : `/v1/projects/${encodeURIComponent(configuredProjectId)}/categories/${categoryId}`;
+  }
+  if (isMemoryQueryPath(method, path)) {
+    return path;
+  }
+  if (isEntityQueryPath(method, path)) {
+    return path;
+  }
+  const entityItem = entityItemSegments(path);
+  if (entityItem !== null) {
+    return `/v1/entities/${entityItem.entityType}/${entityItem.entityId}`;
+  }
+  if (isEventQueryPath(method, path)) {
+    return path;
+  }
+  const eventId = eventItemId(path);
+  if (eventId !== null) {
+    return `/v1/event/${eventId}`;
+  }
+  const historyId = memoryHistoryId(path);
+  if (historyId !== null) {
+    return `/v1/memories/${historyId}/history`;
+  }
+  const itemId = memoryItemId(path);
+  if (itemId !== null) {
+    return `/v1/memories/${itemId}`;
+  }
+  const item = exportItem(path);
+  if (item !== null) {
+    return `/v1/exports/${item.exportId}${item.download ? "/download" : ""}`;
+  }
+  return path;
+}
+
+function isPortableScopeId(value: unknown, maximum: number): value is string {
+  return (
+    typeof value === "string" &&
+    value.length > 0 &&
+    value.length <= maximum &&
+    value === value.trim() &&
+    value.normalize("NFC") === value &&
+    !/\s/u.test(value) &&
+    !/\p{C}/u.test(value)
+  );
+}
+
+function hasConfiguredTraceScope(
+  configuredProjectId: string,
+  configuredAppId?: string,
+): boolean {
+  return (
+    isPortableScopeId(configuredProjectId, 128) &&
+    (configuredAppId === undefined || isPortableScopeId(configuredAppId, 256))
+  );
+}
+
+function scopedJsonBody(
+  bodyText: string,
+  configuredProjectId: string,
+  configuredAppId?: string,
+  projectWide = false,
+  scopeExportFilters = false,
+): string | Response {
+  const payloadText = bodyText.trim() || "{}";
+  let payload: unknown;
+  try {
+    payload = JSON.parse(payloadText);
+  } catch {
+    return jsonError("Invalid JSON body", 400);
+  }
+
+  if (
+    typeof payload !== "object" ||
+    payload === null ||
+    Array.isArray(payload)
+  ) {
+    return jsonError("Invalid JSON body", 400);
+  }
+
+  const scopedPayload: Record<string, unknown> = { ...payload };
+  delete scopedPayload.project_id;
+  delete scopedPayload.app_id;
+  delete scopedPayload.project_wide;
+  scopedPayload.project_id = configuredProjectId;
+  if (projectWide) {
+    scopedPayload.project_wide = true;
+  } else if (configuredAppId !== undefined && !scopeExportFilters) {
+    scopedPayload.app_id = configuredAppId;
+  }
+  if (scopeExportFilters && configuredAppId !== undefined) {
+    const filters = scopedPayload.filters;
+    if (filters === undefined || filters === null) {
+      scopedPayload.filters = { app_id: configuredAppId };
+    } else if (typeof filters === "object" && !Array.isArray(filters)) {
+      scopedPayload.filters = { ...filters, app_id: configuredAppId };
+    }
+  }
+  return JSON.stringify(scopedPayload);
+}
+
+function isJsonRequest(request: Request): boolean {
+  const contentType = request.headers.get("Content-Type");
+  if (contentType === null) {
+    return false;
+  }
+  return (
+    contentType.split(";", 1)[0].trim().toLowerCase() === "application/json"
+  );
+}
+
+async function readBoundedBody(request: Request): Promise<string | Response> {
+  const contentLength = request.headers.get("Content-Length")?.trim();
+  if (
+    contentLength &&
+    /^\d+$/.test(contentLength) &&
+    Number(contentLength) > MAX_SCOPED_JSON_BODY_BYTES
+  ) {
+    return jsonError("JSON body is too large", 413);
+  }
+  if (request.body === null) {
+    return "";
+  }
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      totalBytes += value.byteLength;
+      if (totalBytes > MAX_SCOPED_JSON_BODY_BYTES) {
+        try {
+          await reader.cancel();
+        } catch {
+          // The size violation remains authoritative for hostile streams.
+        }
+        return jsonError("JSON body is too large", 413);
+      }
+      chunks.push(value);
+    }
+  } catch {
+    return jsonError("Invalid JSON body", 400);
+  }
+
+  const body = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(body);
+  } catch {
+    return jsonError("Invalid JSON body", 400);
+  }
+}
+
+async function readBoundedJsonBody(
+  request: Request,
+): Promise<string | Response> {
+  if (!isJsonRequest(request)) {
+    return jsonError("Content-Type must be application/json", 415);
+  }
+  return readBoundedBody(request);
+}
+
+export async function proxySidecarRequest(
+  request: Request,
+  normalizedPath: string,
+  options: SidecarProxyOptions,
+): Promise<Response> {
+  const {
+    baseUrl,
+    configuredProjectId,
+    configuredAppId,
+    operatorApiKey,
+    validateDashboardSession,
+  } = options;
+  const scopedAppId = configuredAppId === "*" ? undefined : configuredAppId;
+  const requestPath = sidecarPathFromRequestUrl(request, normalizedPath);
+  if (!isAllowedSidecarRequest(request.method, requestPath)) {
+    return jsonError("Sidecar route is not allowed", 403);
+  }
+  if (!(await validateDashboardSession())) {
+    return jsonError("Unauthorized", 401);
+  }
+  if (!baseUrl) {
+    return jsonError("SIDECAR_INTERNAL_API_URL is not configured", 500);
+  }
+
+  const isEventRequest = isEventPath(request.method, requestPath);
+  if (
+    isEventRequest &&
+    !hasConfiguredTraceScope(configuredProjectId, scopedAppId)
+  ) {
+    return jsonError("Sidecar trace scope is not configured", 500);
+  }
+  const scopedPath = scopedSidecarPath(
+    request.method,
+    requestPath,
+    configuredProjectId,
+  );
+  if (!scopedPath) {
+    return jsonError("Sidecar route is not allowed", 403);
+  }
+  const isMemoryItemRequest = isMemoryItemPath(request.method, requestPath);
+  const isMemoryHistoryRequest = isMemoryHistoryPath(
+    request.method,
+    requestPath,
+  );
+  const isMemoryRequest = isMemoryPath(request.method, requestPath);
+  const projectWideMemoryScope = isMemoryRequest && configuredAppId === "*";
+  const isEntityRequest = isEntityPath(request.method, requestPath);
+  const projectWideEventScope = isEventRequest && configuredAppId === "*";
+  const url = new URL(`${baseUrl}${scopedPath}`);
+  if (!isMemoryRequest && !isEntityRequest && !isEventRequest) {
+    new URL(request.url).searchParams.forEach((value, key) => {
+      if (key !== "project_id" && key !== "app_id") {
+        url.searchParams.append(key, value);
+      }
+    });
+  }
+  if (isExportPath(request.method, requestPath)) {
+    url.searchParams.set("project_id", configuredProjectId);
+    if (scopedAppId !== undefined) {
+      url.searchParams.set("app_id", scopedAppId);
+    }
+  }
+  if (isMemoryItemRequest || isMemoryHistoryRequest) {
+    url.searchParams.set("project_id", configuredProjectId);
+    if (projectWideMemoryScope) {
+      url.searchParams.set("project_wide", "true");
+    } else if (scopedAppId !== undefined) {
+      url.searchParams.set("app_id", scopedAppId);
+    }
+  }
+  if (isEntityItemPath(request.method, requestPath)) {
+    url.searchParams.set("project_id", configuredProjectId);
+    if (scopedAppId !== undefined) {
+      url.searchParams.set("app_id", scopedAppId);
+    }
+  }
+  if (isEventItemPath(request.method, requestPath)) {
+    url.searchParams.set("project_id", configuredProjectId);
+    if (projectWideEventScope) {
+      url.searchParams.set("project_wide", "true");
+    } else if (scopedAppId !== undefined) {
+      url.searchParams.set("app_id", scopedAppId);
+    }
+  }
+
+  const headers = new Headers();
+  headers.set("Content-Type", "application/json");
+  if (operatorApiKey) {
+    headers.set("X-API-Key", operatorApiKey);
+  }
+  const requestId = request.headers.get("X-Request-ID");
+  if (requestId) {
+    headers.set("X-Request-ID", requestId);
+  }
+
+  const init: RequestInit = {
+    method: request.method,
+    headers,
+    redirect: "manual",
+  };
+
+  if (METHODS_WITH_BODY.has(request.method)) {
+    const rewritesJsonBody =
+      (request.method === "POST" && scopedPath === "/v1/exports") ||
+      isMemoryQueryPath(request.method, scopedPath) ||
+      isEntityQueryPath(request.method, scopedPath) ||
+      isEventQueryPath(request.method, scopedPath) ||
+      isMemoryItemRequest;
+    if (rewritesJsonBody) {
+      const bodyText = await readBoundedJsonBody(request);
+      if (bodyText instanceof Response) {
+        return bodyText;
+      }
+      const rewrittenBody =
+        request.method === "POST" && scopedPath === "/v1/exports"
+          ? scopedJsonBody(
+              bodyText,
+              configuredProjectId,
+              scopedAppId,
+              false,
+              true,
+            )
+          : scopedJsonBody(
+              bodyText,
+              configuredProjectId,
+              scopedAppId,
+              projectWideMemoryScope || projectWideEventScope,
+            );
+      if (rewrittenBody instanceof Response) {
+        return rewrittenBody;
+      }
+      init.body = rewrittenBody;
+    } else {
+      const bodyText = await readBoundedBody(request);
+      if (bodyText instanceof Response) {
+        return bodyText;
+      }
+      init.body = bodyText;
+    }
+  }
+
+  let response: Response;
+  try {
+    response = await (options.fetchUpstream ?? fetch)(url, init);
+  } catch {
+    return jsonError("Sidecar upstream request failed", 502);
+  }
+  if (response.status >= 300 && response.status < 400) {
+    return jsonError("Sidecar upstream request failed", 502);
+  }
+
+  const responseHeaders = new Headers({
+    "Content-Type": response.headers.get("Content-Type") ?? "application/json",
+  });
+  if (requestPath.endsWith("/download")) {
+    const contentDisposition = response.headers.get("Content-Disposition");
+    if (
+      contentDisposition !== null &&
+      /^attachment(?:;|$)/i.test(contentDisposition.trim())
+    ) {
+      responseHeaders.set("Content-Disposition", contentDisposition);
+    }
+  }
+  return new Response(response.body, {
+    status: response.status,
+    headers: responseHeaders,
+  });
+}

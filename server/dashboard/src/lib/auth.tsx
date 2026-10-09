@@ -9,6 +9,10 @@ import {
 } from "react";
 import { api, setAccessToken } from "@/utils/api";
 import { AUTH_ENDPOINTS } from "@/utils/api-endpoints";
+import {
+  DashboardSessionClientResult,
+  requestDashboardSessionRefresh,
+} from "@/utils/dashboard-session-client";
 
 export interface AuthUser {
   id: string;
@@ -38,6 +42,9 @@ export const AuthContext = createContext<AuthContextValue>({
   refreshUser: async () => {},
 });
 
+const INITIAL_RETRY_DELAY_MS = 1000;
+const MAX_RETRY_DELAY_MS = 30_000;
+
 async function storeRefreshToken(refreshToken: string) {
   await fetch("/api/auth/refresh", {
     method: "PUT",
@@ -50,15 +57,12 @@ async function clearRefreshToken() {
   await fetch("/api/auth/refresh", { method: "DELETE" });
 }
 
-async function refreshSession(): Promise<boolean> {
-  const res = await fetch("/api/auth/refresh", {
-    method: "POST",
-    credentials: "include",
-  });
-  if (!res.ok) return false;
-  const data = await res.json();
-  setAccessToken(data.access_token);
-  return true;
+async function refreshSession(): Promise<DashboardSessionClientResult> {
+  const result = await requestDashboardSessionRefresh();
+  if (result.status === "authenticated") {
+    setAccessToken(result.accessToken);
+  }
+  return result;
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -72,18 +76,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let active = true;
-    (async () => {
-      try {
-        const ok = await refreshSession();
-        if (ok && active) await loadUser();
-      } catch {
-        if (active) setUser(null);
-      } finally {
-        if (active) setIsLoading(false);
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let retryDelay = INITIAL_RETRY_DELAY_MS;
+
+    const scheduleRetry = () => {
+      if (!active) return;
+      retryTimer = setTimeout(() => {
+        void restoreSession();
+      }, retryDelay);
+      retryDelay = Math.min(retryDelay * 2, MAX_RETRY_DELAY_MS);
+    };
+
+    const restoreSession = async () => {
+      const result = await refreshSession();
+      if (!active) return;
+
+      if (result.status === "unauthorized") {
+        setAccessToken(null);
+        setUser(null);
+        setIsLoading(false);
+        return;
       }
-    })();
+      if (result.status === "unavailable") {
+        scheduleRetry();
+        return;
+      }
+
+      try {
+        await loadUser();
+        if (active) setIsLoading(false);
+      } catch {
+        scheduleRetry();
+      }
+    };
+
+    void restoreSession();
     return () => {
       active = false;
+      if (retryTimer !== undefined) clearTimeout(retryTimer);
     };
   }, [loadUser]);
 

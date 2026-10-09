@@ -1,20 +1,17 @@
-FROM node:20-alpine AS base
+FROM node:24-alpine AS base
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 # Dependencies
 FROM base AS deps
-COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* ./
-RUN \
-  if [ -f yarn.lock ]; then yarn --frozen-lockfile --network-timeout 600000; \
-  elif [ -f package-lock.json ]; then npm ci; \
-  elif [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm i; \
-  else npm install; \
-  fi
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN corepack enable pnpm && pnpm install --frozen-lockfile
 
 # Build
 FROM base AS builder
 WORKDIR /app
+ARG CIRCLE_NODE_TOTAL=2
+ENV CIRCLE_NODE_TOTAL=$CIRCLE_NODE_TOTAL
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
@@ -24,7 +21,7 @@ ENV NEXT_PUBLIC_API_URL=NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_INSTANCE_NAME=NEXT_PUBLIC_INSTANCE_NAME
 ENV NEXT_PUBLIC_MEM0_OSS_LIST_FETCH_LIMIT=NEXT_PUBLIC_MEM0_OSS_LIST_FETCH_LIMIT
 
-RUN npm run build
+RUN corepack enable pnpm && pnpm run build
 
 # Production
 FROM base AS runner

@@ -1,277 +1,1002 @@
 "use client";
 
-import { useState } from "react";
-import { format, formatDistanceToNow } from "date-fns";
-import { RefreshCw } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronRight, RefreshCw } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis } from "recharts";
+
 import { DataTable } from "@/components/shared/data-table";
-import { TableSkeleton } from "@/components/shared/table-skeleton";
-import { EmptyState } from "@/components/self-hosted/empty-state";
-import { api } from "@/utils/api";
-import { REQUEST_ENDPOINTS } from "@/utils/api-endpoints";
-import { useApiQuery } from "@/hooks/use-api-query";
-import { ApiRequestLog } from "@/types/api";
+import { DateRangeFilter } from "@/components/self-hosted/explorer/date-range-filter";
+import { EntityBadges } from "@/components/self-hosted/explorer/entity-badges";
+import {
+  FilterBuilder,
+  type ExplorerFilterFieldOption,
+} from "@/components/self-hosted/explorer/filter-builder";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import type {
+  ExplorerDateRange,
+  ExplorerFilter,
+  ExplorerMatch,
+  ExplorerQueryPayload,
+} from "@/types/dashboard-explorer";
+import type {
+  SidecarTrace,
+  SidecarTraceChannel,
+  SidecarTraceChannelFacet,
+  SidecarTraceChannelFilter,
+  SidecarTracePage,
+} from "@/types/sidecar";
+import {
+  formatBrowserLocalTimestamp,
+  formatBrowserRelativeTimestamp,
+  formatBrowserTimelineTick,
+} from "@/utils/browser-time";
+import {
+  createExplorerFilter,
+  readExplorerUrlState,
+  writeExplorerUrlState,
+} from "@/utils/explorer-query-state";
+import { sidecarQuery } from "@/utils/sidecar-api";
+import {
+  REQUEST_TRACE_REFRESH_INTERVAL_MS,
+  closeTraceRequestUrl,
+  isCurrentTraceListRequest,
+  nextTraceRequestGeneration,
+  normalizeRequestTraceFilters,
+  normalizeRequestTraceQueryState,
+  normalizeTracePage,
+  requestTraceQueryPayload,
+  resetRequestTraceQueryPage,
+  parseTraceChannelValue,
+  setRequestTraceChannel,
+  setRequestTraceOperation,
+  setTraceRequestIdInUrl,
+  shouldAutoRefreshRequestTraces,
+  traceChannelValue,
+  toggleRequestTraceHasResults,
+  writeTraceControlUrl,
+  type RequestTraceQueryState,
+} from "@/utils/request-trace-state";
 
-type RequestLog = {
-  id: string;
-  createdAt: string;
-  method: string;
-  path: string;
-  statusCode: number;
-  latencyMs: number;
-  authType: string;
+import { RequestTraceDrawer } from "./request-trace-drawer";
+
+type TraceOperation = RequestTraceQueryState["operation"];
+
+type TraceColumn = {
+  key: keyof SidecarTrace;
+  label: string;
+  width?: number;
+  align?: "left" | "center" | "right";
+  render?: (
+    value: SidecarTrace[keyof SidecarTrace],
+    row: SidecarTrace,
+  ) => React.ReactNode;
 };
 
-const REQUEST_LOG_LIMIT = 200;
-const PAGE_SIZE = 20;
-
-const getStatusClassName = (statusCode: number) => {
-  if (statusCode >= 500) {
-    return "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/40 dark:text-rose-300";
-  }
-
-  if (statusCode >= 400) {
-    return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-300";
-  }
-
-  return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/40 dark:text-emerald-300";
+const DEFAULT_QUERY: RequestTraceQueryState = {
+  match: "all",
+  filters: [],
+  date_range: { from: null, to: null },
+  operation: null,
+  has_results: null,
+  channel: null,
+  page: 1,
+  page_size: 20,
 };
 
-const getMethodClassName = (method: string) => {
-  switch (method.toUpperCase()) {
-    case "POST":
-      return "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/40 dark:bg-sky-950/40 dark:text-sky-300";
-    case "PUT":
-    case "PATCH":
-      return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-300";
-    case "DELETE":
-      return "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/40 dark:text-rose-300";
-    default:
-      return "border-memBorder-primary bg-surface-default-secondary text-onSurface-default-secondary";
-  }
-};
+const FILTER_FIELDS: ExplorerFilterFieldOption[] = [
+  { value: "user_id", label: "User ID", operators: ["equals"] },
+  { value: "agent_id", label: "Agent ID", operators: ["equals"] },
+  { value: "app_id", label: "App ID", operators: ["equals"] },
+  { value: "run_id", label: "Run ID", operators: ["equals"] },
+];
 
-const getAuthLabel = (authType: string) => {
-  switch (authType.toLowerCase()) {
-    case "bearer":
-      return "JWT";
-    case "api_key":
-      return "API Key";
-    case "admin_api_key":
-      return "Admin Key";
-    case "disabled":
-      return "Disabled";
-    default:
-      return "--";
-  }
-};
-
-const normalizeLog = (entry: ApiRequestLog): RequestLog => {
-  return {
-    id: entry.id,
-    createdAt: entry.created_at,
-    method: entry.method,
-    path: entry.path,
-    statusCode: entry.status_code,
-    latencyMs: entry.latency_ms,
-    authType: entry.auth_type,
-  };
-};
+const OPERATION_CONTROLS: Array<{
+  label: string;
+  operation: TraceOperation;
+}> = [
+  { label: "Overview", operation: null },
+  { label: "ADD", operation: "ADD" },
+  { label: "SEARCH", operation: "SEARCH" },
+  { label: "GET ALL", operation: "GET_ALL" },
+];
 
 export default function RequestsPage() {
-  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
-  const [page, setPage] = useState(0);
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const search = searchParams.toString();
+  const [query, setQuery] = useState<RequestTraceQueryState>(DEFAULT_QUERY);
+  const [hydrated, setHydrated] = useState(false);
+  const [pageData, setPageData] = useState<SidecarTracePage | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const requestGeneration = useRef(0);
+  const pageDataRef = useRef<SidecarTracePage | null>(null);
+  const mountedRef = useRef(true);
+  const pageHeadingRef = useRef<HTMLHeadingElement>(null);
+  const requestOpenerRef = useRef<HTMLElement | null>(null);
+  const openerRequestIdRef = useRef<string | null>(null);
 
-  const {
-    data: logs = [],
-    isLoading,
-    error,
-    refetch,
-  } = useApiQuery<RequestLog[]>(
-    async () => {
-      const res = await api.get<ApiRequestLog[]>(REQUEST_ENDPOINTS.BASE, {
-        params: { limit: REQUEST_LOG_LIMIT },
-      });
-      setLastUpdated(new Date().toISOString());
-      return (res.data ?? []).map(normalizeLog);
+  const requestId = normalizeRequestId(searchParams.get("requestId"));
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      requestOpenerRef.current = null;
+      openerRequestIdRef.current = null;
+      requestGeneration.current = nextTraceRequestGeneration(
+        requestGeneration.current,
+      );
+    };
+  }, []);
+
+  useEffect(() => {
+    if (requestId !== null && openerRequestIdRef.current !== requestId) {
+      requestOpenerRef.current = null;
+      openerRequestIdRef.current = null;
+    }
+  }, [requestId]);
+
+  useEffect(() => {
+    const currentParams = new URLSearchParams(search);
+    const nextQuery = readRequestUrlState(currentParams);
+    const canonicalParams = writeRequestUrlState(currentParams, nextQuery);
+    const canonicalSearch = canonicalParams.toString();
+    if (canonicalSearch !== search) {
+      router.replace(
+        canonicalSearch ? `${pathname}?${canonicalSearch}` : pathname,
+      );
+    }
+    setQuery((current) =>
+      requestQueriesEqual(current, nextQuery) ? current : nextQuery,
+    );
+    setHydrated(true);
+  }, [pathname, router, search]);
+
+  const replaceParams = useCallback(
+    (next: URLSearchParams) => {
+      const value = next.toString();
+      router.replace(value ? `${pathname}?${value}` : pathname);
     },
-    { errorToast: "Failed to load request logs", initialData: [] },
+    [pathname, router],
   );
 
-  const totalRequests = logs.length;
-  const successfulRequests = logs.filter((log) => log.statusCode < 400).length;
-  const successRate =
-    totalRequests > 0
-      ? Math.round((successfulRequests / totalRequests) * 100)
-      : 0;
-  const averageLatency =
-    totalRequests > 0
-      ? Math.round(
-          logs.reduce((sum, log) => sum + log.latencyMs, 0) / totalRequests,
-        )
-      : 0;
+  const writeQuery = useCallback(
+    (next: RequestTraceQueryState) => {
+      setQuery(next);
+      replaceParams(writeRequestUrlState(new URLSearchParams(search), next));
+    },
+    [replaceParams, search],
+  );
 
-  const columns = [
-    {
-      key: "createdAt" as keyof RequestLog,
-      label: "Time",
-      width: 140,
-      render: (value: string) => (
-        <span title={format(new Date(value), "PPpp")}>
-          {formatDistanceToNow(new Date(value), { addSuffix: true })}
-        </span>
-      ),
+  useEffect(() => {
+    if (!hydrated) {
+      return;
+    }
+    const controller = new AbortController();
+    const generation = nextTraceRequestGeneration(requestGeneration.current);
+    requestGeneration.current = generation;
+    if (pageDataRef.current === null) {
+      setIsLoading(true);
+    } else {
+      setIsRefreshing(true);
+    }
+    setLoadError(null);
+
+    void sidecarQuery<SidecarTracePage>(
+      "/v1/events/query",
+      requestTraceQueryPayload(query),
+      {
+        signal: controller.signal,
+      },
+    )
+      .then((response) => {
+        if (
+          !controller.signal.aborted &&
+          isCurrentTraceListRequest(
+            generation,
+            requestGeneration.current,
+            mountedRef.current,
+          )
+        ) {
+          pageDataRef.current = response;
+          setPageData(response);
+        }
+      })
+      .catch((error: unknown) => {
+        if (
+          !controller.signal.aborted &&
+          isCurrentTraceListRequest(
+            generation,
+            requestGeneration.current,
+            mountedRef.current,
+          ) &&
+          !isAbortError(error)
+        ) {
+          setLoadError(error instanceof Error ? error.message : String(error));
+        }
+      })
+      .finally(() => {
+        if (
+          !controller.signal.aborted &&
+          isCurrentTraceListRequest(
+            generation,
+            requestGeneration.current,
+            mountedRef.current,
+          )
+        ) {
+          setIsLoading(false);
+          setIsRefreshing(false);
+        }
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, [hydrated, query, refreshVersion]);
+
+  const refresh = useCallback(() => {
+    setRefreshVersion((value) => value + 1);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) {
+      return;
+    }
+    const pageDocument = globalThis["document"];
+    const refreshVisibleRequests = () => {
+      if (
+        shouldAutoRefreshRequestTraces(
+          pageDocument.visibilityState,
+          isLoading || isRefreshing,
+        )
+      ) {
+        setRefreshVersion((value) => value + 1);
+      }
+    };
+    const intervalId = setInterval(
+      refreshVisibleRequests,
+      REQUEST_TRACE_REFRESH_INTERVAL_MS,
+    );
+    pageDocument.addEventListener("visibilitychange", refreshVisibleRequests);
+    return () => {
+      clearInterval(intervalId);
+      pageDocument.removeEventListener(
+        "visibilitychange",
+        refreshVisibleRequests,
+      );
+    };
+  }, [hydrated, isLoading, isRefreshing]);
+
+  const applyCriteria = useCallback(
+    (_match: ExplorerMatch, filters: ExplorerFilter[]) => {
+      writeQuery(
+        resetRequestTraceQueryPage({
+          ...query,
+          match: "all",
+          filters: normalizeRequestTraceFilters(filters),
+        }),
+      );
     },
-    {
-      key: "method" as keyof RequestLog,
-      label: "Method",
-      width: 96,
-      render: (value: string) => (
-        <Badge variant="outline" className={getMethodClassName(value)}>
-          {value.toUpperCase()}
-        </Badge>
-      ),
+    [query, writeQuery],
+  );
+
+  const changeDateRange = useCallback(
+    (dateRange: ExplorerDateRange) => {
+      writeQuery(
+        resetRequestTraceQueryPage({ ...query, date_range: dateRange }),
+      );
     },
-    {
-      key: "path" as keyof RequestLog,
-      label: "Path",
-      width: 360,
-      render: (value: string) => (
-        <span className="font-mono text-xs break-all text-onSurface-default-primary">
-          {value}
-        </span>
-      ),
+    [query, writeQuery],
+  );
+
+  const addIdentityFilter = useCallback(
+    (identity: {
+      field: "user_id" | "agent_id" | "app_id" | "run_id";
+      value: string;
+    }) => {
+      const filter = createExplorerFilter({
+        field: identity.field,
+        operator: "equals",
+        value: identity.value,
+      });
+      applyCriteria("all", [...query.filters, filter]);
     },
-    {
-      key: "statusCode" as keyof RequestLog,
-      label: "Status",
-      width: 120,
-      render: (value: number) => (
-        <Badge variant="outline" className={getStatusClassName(value)}>
-          {value}
-        </Badge>
-      ),
+    [applyCriteria, query.filters],
+  );
+
+  const selectOperation = useCallback(
+    (operation: TraceOperation) => {
+      writeQuery(setRequestTraceOperation(query, operation));
     },
-    {
-      key: "latencyMs" as keyof RequestLog,
-      label: "Latency",
-      width: 100,
-      render: (value: number) => <span>{value} ms</span>,
+    [query, writeQuery],
+  );
+
+  const toggleHasResults = useCallback(() => {
+    writeQuery(toggleRequestTraceHasResults(query));
+  }, [query, writeQuery]);
+
+  const selectChannel = useCallback(
+    (channel: SidecarTraceChannelFilter | null) => {
+      writeQuery(setRequestTraceChannel(query, channel));
     },
-    {
-      key: "authType" as keyof RequestLog,
-      label: "Auth",
-      width: 120,
-      render: (value: string) => getAuthLabel(value),
+    [query, writeQuery],
+  );
+
+  const setDrawerRequestId = useCallback(
+    (id: string | null) => {
+      const current = new URLSearchParams(search);
+      const next =
+        id === null
+          ? closeTraceRequestUrl(current)
+          : setTraceRequestIdInUrl(current, id);
+      replaceParams(next);
     },
-  ];
+    [replaceParams, search],
+  );
+
+  const openRequestTrace = useCallback(
+    (id: string, opener: HTMLElement | null) => {
+      requestOpenerRef.current = opener?.isConnected ? opener : null;
+      openerRequestIdRef.current = id;
+      setDrawerRequestId(id);
+    },
+    [setDrawerRequestId],
+  );
+
+  const restoreRequestFocus = useCallback(() => {
+    if (!mountedRef.current) {
+      return;
+    }
+    const opener = requestOpenerRef.current;
+    requestOpenerRef.current = null;
+    openerRequestIdRef.current = null;
+    const target = opener?.isConnected ? opener : pageHeadingRef.current;
+    if (target?.isConnected) {
+      target.focus();
+    }
+  }, []);
+
+  const columns = useMemo<TraceColumn[]>(
+    () => [
+      {
+        key: "requested_at",
+        label: "Time",
+        width: 13,
+        render: (value) => (
+          <TraceTime value={typeof value === "string" ? value : null} />
+        ),
+      },
+      {
+        key: "display_operation",
+        label: "Type",
+        width: 10,
+        render: (_value, row) => (
+          <OperationBadge operation={row.display_operation} />
+        ),
+      },
+      {
+        key: "channel",
+        label: "Client",
+        width: 18,
+        render: (_value, row) => (
+          <TraceChannel
+            channel={row.channel}
+            onSelect={(channel) => selectChannel(channel)}
+          />
+        ),
+      },
+      {
+        key: "entities",
+        label: "Entities",
+        width: 19,
+        render: (_value, row) => (
+          <div onClick={(event) => event.stopPropagation()}>
+            <TraceEntities trace={row} onBadgeClick={addIdentityFilter} />
+          </div>
+        ),
+      },
+      {
+        key: "request",
+        label: "Event",
+        width: 24,
+        render: (_value, row) => (
+          <TraceEventButton
+            trace={row}
+            onOpen={(opener) => openRequestTrace(row.id, opener)}
+          />
+        ),
+      },
+      {
+        key: "latency_ms",
+        label: "Latency",
+        width: 8,
+        render: (_value, row) => formatLatency(row.latency_ms),
+      },
+      {
+        key: "status",
+        label: "Status",
+        width: 8,
+        render: (_value, row) => <StatusBadge status={row.status} />,
+      },
+    ],
+    [addIdentityFilter, openRequestTrace, selectChannel],
+  );
+
+  const rows = pageData?.results ?? [];
+  const channelFacets = useMemo(
+    () => withSelectedChannel(pageData?.channels ?? [], query.channel),
+    [pageData?.channels, query.channel],
+  );
+  const hasInitialError = loadError !== null && pageData === null;
+  const hasNextPage =
+    pageData?.has_more === true &&
+    normalizeTracePage(query.page + 1, query.page_size) > query.page;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-xl font-semibold font-fustat">Requests</h1>
-          <p className="text-sm text-onSurface-default-secondary">
-            Recent request logs from your self-hosted instance.
+    <div className="w-full min-w-0 max-w-full [contain:inline-size] space-y-5">
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 space-y-1">
+          <h1
+            ref={pageHeadingRef}
+            tabIndex={-1}
+            className="font-fustat text-xl font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            Requests
+          </h1>
+          <p className="break-words text-sm text-onSurface-default-secondary">
+            Inspect scoped memory operations, latency, results, and sanitized
+            payloads.
           </p>
-          {lastUpdated && (
-            <p className="text-xs text-onSurface-default-tertiary">
-              Last updated{" "}
-              {formatDistanceToNow(new Date(lastUpdated), { addSuffix: true })}
-            </p>
-          )}
         </div>
         <Button
+          type="button"
           variant="outline"
-          onClick={() => {
-            setPage(0);
-            void refetch();
-          }}
-          disabled={isLoading}
+          disabled={isLoading || isRefreshing}
+          onClick={refresh}
         >
-          <RefreshCw className="size-4 mr-2" />
-          Refresh
+          <RefreshCw
+            className={`mr-2 size-4 ${isRefreshing ? "animate-spin" : ""}`}
+          />
+          {isRefreshing ? "Refreshing" : "Refresh"}
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        {[
-          { label: "Total Requests", value: totalRequests },
-          {
-            label: "Success Rate",
-            value: totalRequests > 0 ? `${successRate}%` : "--",
-          },
-          {
-            label: "Avg Latency",
-            value: totalRequests > 0 ? `${averageLatency} ms` : "--",
-          },
-        ].map((card) => (
-          <Card key={card.label} className="border-memBorder-primary">
-            <CardContent className="p-5">
-              <p className="text-xs text-onSurface-default-tertiary">
-                {card.label}
-              </p>
-              <p className="mt-1 text-2xl font-semibold">{card.value}</p>
-            </CardContent>
-          </Card>
-        ))}
+      <div
+        className="flex flex-wrap items-center gap-2"
+        aria-label="Request operation filters"
+      >
+        {OPERATION_CONTROLS.map((control) => {
+          const active = query.operation === control.operation;
+          return (
+            <Button
+              key={control.label}
+              type="button"
+              size="sm"
+              variant={active ? "default" : "outline"}
+              aria-pressed={active}
+              onClick={() => selectOperation(control.operation)}
+            >
+              {control.label}
+            </Button>
+          );
+        })}
       </div>
 
-      {error && (
-        <Card className="border-memBorder-primary">
-          <CardContent className="p-4 text-sm text-onSurface-danger-primary">
-            {error}
-          </CardContent>
-        </Card>
-      )}
+      <div
+        className="flex flex-wrap items-center gap-2"
+        aria-label="Has results filter"
+      >
+        <Button
+          type="button"
+          size="sm"
+          variant={query.has_results === true ? "default" : "outline"}
+          aria-pressed={query.has_results === true}
+          onClick={toggleHasResults}
+        >
+          Has Results
+        </Button>
+      </div>
 
-      {isLoading ? (
-        <TableSkeleton rows={6} columns={6} />
-      ) : logs.length === 0 ? (
-        <EmptyState
-          title="No request logs yet"
-          description="Requests will appear here once your instance receives traffic."
-          image="requests"
+      <div className="flex flex-wrap items-center gap-2">
+        <DateRangeFilter value={query.date_range} onChange={changeDateRange} />
+        <Select
+          value={traceChannelValue(query.channel)}
+          onValueChange={(value) =>
+            selectChannel(parseTraceChannelValue(value))
+          }
+        >
+          <SelectTrigger
+            aria-label="Request client filter"
+            className="w-full sm:w-[280px]"
+          >
+            <SelectValue placeholder="All clients" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All clients</SelectItem>
+            {channelFacets.map((channel) => (
+              <SelectItem
+                key={traceChannelValue(channel)}
+                value={traceChannelValue(channel)}
+              >
+                {formatChannelOption(channel)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <FilterBuilder
+          match="all"
+          filters={query.filters}
+          fields={FILTER_FIELDS}
+          allowAnyMatch={false}
+          onApply={applyCriteria}
+          onRemoveAll={(filters) => applyCriteria("all", filters)}
         />
+        <span className="text-xs text-onSurface-default-tertiary">
+          Entity filters use exact ID matches.
+        </span>
+      </div>
+
+      {loadError !== null ? (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-3 border-y border-memBorder-primary py-3"
+        >
+          <span className="break-all text-sm text-onSurface-danger-primary">
+            {pageData
+              ? `Could not refresh requests: ${loadError}`
+              : `Could not load requests: ${loadError}`}
+          </span>
+          <Button type="button" size="sm" variant="outline" onClick={refresh}>
+            Retry
+          </Button>
+        </div>
+      ) : null}
+
+      {pageData !== null ? (
+        <section
+          aria-labelledby="request-timeline-heading"
+          className="space-y-3"
+        >
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 id="request-timeline-heading" className="font-semibold">
+              Request timeline
+            </h2>
+            <span className="text-sm text-onSurface-default-secondary">
+              {pageData.total} total
+            </span>
+          </div>
+          {pageData.timeline.length > 0 ? (
+            <>
+              <div className="h-40 min-w-0 rounded-md border border-memBorder-primary p-3">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={pageData.timeline}>
+                    <XAxis
+                      dataKey="timestamp"
+                      tickFormatter={formatTimelineTick}
+                      minTickGap={28}
+                    />
+                    <Tooltip
+                      labelFormatter={(value) =>
+                        formatBrowserLocalTimestamp(String(value))
+                      }
+                    />
+                    <Bar
+                      dataKey="count"
+                      fill="hsl(var(--primary))"
+                      radius={[4, 4, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <p
+                role="status"
+                aria-label="Request timeline summary"
+                className="text-xs text-onSurface-default-secondary"
+              >
+                {timelineSummary(pageData)}
+              </p>
+            </>
+          ) : (
+            <p className="rounded-md border border-memBorder-primary p-6 text-center text-sm text-onSurface-default-secondary">
+              No request activity for this range.
+            </p>
+          )}
+        </section>
+      ) : null}
+
+      {isLoading && pageData === null ? (
+        <div
+          role="status"
+          className="py-16 text-center text-sm text-onSurface-default-secondary"
+        >
+          Loading requests...
+        </div>
+      ) : hasInitialError ? null : rows.length === 0 ? (
+        <div className="py-16 text-center text-sm text-onSurface-default-secondary">
+          No requests found.
+        </div>
       ) : (
         <>
-          <Card className="border-memBorder-primary overflow-hidden">
+          <div className="hidden min-w-0 overflow-hidden border-y border-memBorder-primary md:block">
             <DataTable
-              data={logs.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)}
+              data={rows}
               columns={columns}
               getRowKey={(row) => row.id}
+              onRowClick={(row) => openRequestTrace(row.id, null)}
             />
-          </Card>
-          {logs.length > PAGE_SIZE && (
-            <div className="flex items-center justify-between text-sm text-onSurface-default-tertiary">
-              <span>
-                {page * PAGE_SIZE + 1}–
-                {Math.min((page + 1) * PAGE_SIZE, logs.length)} of {logs.length}
-              </span>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page === 0}
-                  onClick={() => setPage((p) => p - 1)}
-                >
-                  Previous
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={(page + 1) * PAGE_SIZE >= logs.length}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
-          )}
+          </div>
+          <div className="space-y-2 md:hidden">
+            {rows.map((trace) => (
+              <button
+                key={trace.id}
+                type="button"
+                className="w-full min-w-0 space-y-3 rounded-md border border-memBorder-primary p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={(event) =>
+                  openRequestTrace(trace.id, event.currentTarget)
+                }
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <OperationBadge operation={trace.display_operation} />
+                    <StatusBadge status={trace.status} />
+                  </div>
+                  <ChevronRight className="size-4 shrink-0" />
+                </div>
+                <p className="whitespace-normal break-words text-sm">
+                  {traceEventLabel(trace)}
+                </p>
+                <TraceChannel channel={trace.channel} />
+                <TraceEntities trace={trace} />
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-onSurface-default-secondary">
+                  <TraceTime value={trace.requested_at} />
+                  <span>{formatLatency(trace.latency_ms)}</span>
+                </div>
+              </button>
+            ))}
+          </div>
         </>
       )}
+
+      {pageData && (query.page > 1 || hasNextPage) ? (
+        <Pagination>
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious
+                href="#"
+                isDisabled={query.page <= 1 || isRefreshing}
+                aria-disabled={query.page <= 1 || isRefreshing}
+                tabIndex={query.page <= 1 || isRefreshing ? -1 : undefined}
+                onClick={(event) => {
+                  event.preventDefault();
+                  writeQuery({ ...query, page: Math.max(1, query.page - 1) });
+                }}
+              />
+            </PaginationItem>
+            <PaginationItem>
+              <span className="px-3 text-sm" aria-live="polite">
+                Page {query.page}
+              </span>
+            </PaginationItem>
+            <PaginationItem>
+              <PaginationNext
+                href="#"
+                isDisabled={!hasNextPage || isRefreshing}
+                aria-disabled={!hasNextPage || isRefreshing}
+                tabIndex={!hasNextPage || isRefreshing ? -1 : undefined}
+                onClick={(event) => {
+                  event.preventDefault();
+                  writeQuery({
+                    ...query,
+                    page: normalizeTracePage(query.page + 1, query.page_size),
+                  });
+                }}
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      ) : null}
+
+      <RequestTraceDrawer
+        requestId={requestId}
+        onRequestIdChange={setDrawerRequestId}
+        onRestoreFocus={restoreRequestFocus}
+      />
     </div>
   );
+}
+
+function readRequestUrlState(
+  searchParams: URLSearchParams,
+): RequestTraceQueryState {
+  const shared = readExplorerUrlState(searchParams);
+  return normalizeRequestTraceQueryState(shared, searchParams);
+}
+
+function writeRequestUrlState(
+  current: URLSearchParams,
+  query: RequestTraceQueryState,
+): URLSearchParams {
+  const sharedQuery: ExplorerQueryPayload = {
+    match: query.match,
+    filters: query.filters,
+    date_range: query.date_range,
+    page: query.page,
+    page_size: query.page_size,
+    sort: "created_at_desc",
+  };
+  const next = writeExplorerUrlState(current, sharedQuery);
+  return writeTraceControlUrl(
+    next,
+    query.operation,
+    query.has_results,
+    query.channel,
+  );
+}
+
+function requestQueriesEqual(
+  left: RequestTraceQueryState,
+  right: RequestTraceQueryState,
+) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function normalizeRequestId(value: unknown): string | null {
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
+}
+
+function isAbortError(error: unknown): boolean {
+  return (
+    error !== null &&
+    typeof error === "object" &&
+    "name" in error &&
+    error.name === "AbortError"
+  );
+}
+
+function traceEntityId(
+  trace: SidecarTrace,
+  type: "user" | "agent" | "app" | "run",
+) {
+  return trace.entities.find((entity) => entity.type === type)?.id ?? null;
+}
+
+function TraceEntities({
+  trace,
+  onBadgeClick,
+}: {
+  trace: SidecarTrace;
+  onBadgeClick?: (identity: {
+    field: "user_id" | "agent_id" | "app_id" | "run_id";
+    value: string;
+  }) => void;
+}) {
+  return (
+    <EntityBadges
+      userId={traceEntityId(trace, "user")}
+      agentId={traceEntityId(trace, "agent")}
+      appId={traceEntityId(trace, "app")}
+      runId={traceEntityId(trace, "run")}
+      onBadgeClick={onBadgeClick}
+    />
+  );
+}
+
+function TraceEventButton({
+  trace,
+  onOpen,
+}: {
+  trace: SidecarTrace;
+  onOpen: (opener: HTMLButtonElement) => void;
+}) {
+  const label = traceEventLabel(trace);
+  return (
+    <button
+      type="button"
+      className="line-clamp-2 w-full rounded-sm text-left whitespace-normal break-words hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      title={label}
+      aria-label={`Open request ${trace.id}: ${label}`}
+      onClick={(event) => {
+        event.stopPropagation();
+        onOpen(event.currentTarget);
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+function OperationBadge({
+  operation,
+}: {
+  operation: SidecarTrace["display_operation"];
+}) {
+  return (
+    <Badge variant="outline" className="whitespace-nowrap">
+      {operation}
+    </Badge>
+  );
+}
+
+function StatusBadge({ status }: { status: SidecarTrace["status"] }) {
+  const className =
+    status === "FAILED"
+      ? "border-rose-300 text-rose-700 dark:text-rose-300"
+      : status === "SUCCEEDED"
+        ? "border-emerald-300 text-emerald-700 dark:text-emerald-300"
+        : "border-amber-300 text-amber-700 dark:text-amber-300";
+  return (
+    <Badge variant="outline" className={className}>
+      {status}
+    </Badge>
+  );
+}
+
+function TraceChannel({
+  channel,
+  onSelect,
+}: {
+  channel: SidecarTraceChannel;
+  onSelect?: (channel: SidecarTraceChannelFilter) => void;
+}) {
+  const content = (
+    <>
+      <Badge variant="outline" className="shrink-0 whitespace-nowrap">
+        {formatTransport(channel.transport)}
+      </Badge>
+      <span className="min-w-0 truncate text-xs" title={channelTitle(channel)}>
+        {channel.label}
+      </span>
+    </>
+  );
+  if (onSelect === undefined) {
+    return <div className="flex min-w-0 items-center gap-2">{content}</div>;
+  }
+  return (
+    <button
+      type="button"
+      className="flex min-w-0 max-w-full items-center gap-2 rounded-sm text-left hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      aria-label={`Filter requests by ${channel.label}`}
+      title={channelTitle(channel)}
+      onClick={(event) => {
+        event.stopPropagation();
+        onSelect({
+          transport: channel.transport,
+          credential_kind: channel.credential_kind,
+          credential_id: channel.credential_id,
+        });
+      }}
+    >
+      {content}
+    </button>
+  );
+}
+
+function withSelectedChannel(
+  facets: SidecarTraceChannelFacet[],
+  selected: SidecarTraceChannelFilter | null,
+): SidecarTraceChannelFacet[] {
+  if (
+    selected === null ||
+    facets.some((facet) => sameChannel(facet, selected))
+  ) {
+    return facets;
+  }
+  return [
+    ...facets,
+    {
+      ...selected,
+      label:
+        selected.credential_id === null
+          ? formatCredentialKind(selected.credential_kind)
+          : `Client ${selected.credential_id.slice(0, 8)}`,
+      key_prefix: null,
+      count: 0,
+    },
+  ];
+}
+
+function sameChannel(
+  left: SidecarTraceChannelFilter,
+  right: SidecarTraceChannelFilter,
+): boolean {
+  return (
+    left.transport === right.transport &&
+    left.credential_kind === right.credential_kind &&
+    left.credential_id === right.credential_id
+  );
+}
+
+function formatChannelOption(channel: SidecarTraceChannelFacet): string {
+  return `${formatTransport(channel.transport)} - ${channel.label} (${channel.count})`;
+}
+
+function channelTitle(channel: SidecarTraceChannel): string {
+  const prefix =
+    channel.key_prefix === null ? "" : `, key prefix ${channel.key_prefix}`;
+  return `${formatTransport(channel.transport)}, ${channel.label}${prefix}`;
+}
+
+function formatTransport(transport: SidecarTraceChannel["transport"]): string {
+  if (transport === "mcp") return "MCP";
+  if (transport === "rest") return "REST";
+  if (transport === "system") return "System";
+  return "Unknown";
+}
+
+function formatCredentialKind(
+  kind: SidecarTraceChannel["credential_kind"],
+): string {
+  if (kind === "core_api_key") return "API key";
+  if (kind === "legacy_static") return "Legacy shared MCP key";
+  if (kind === "operator_static") return "Legacy admin API key";
+  if (kind === "session") return "Authenticated session";
+  if (kind === "disabled") return "Authentication disabled";
+  return "Unknown";
+}
+
+function traceEventLabel(trace: SidecarTrace): string {
+  const query = trace.request.query;
+  if (trace.display_operation === "SEARCH" && typeof query === "string") {
+    return query;
+  }
+  if (trace.display_operation === "ADD") {
+    return "Add memory";
+  }
+  if (trace.display_operation === "GET ALL") {
+    return "Get all memories";
+  }
+  return trace.operation || "Memory event";
+}
+
+function formatLatency(value: number | null): string {
+  return value === null || !Number.isFinite(value)
+    ? "--"
+    : `${value.toFixed(2)} ms`;
+}
+
+function TraceTime({ value }: { value: string | null }) {
+  if (value === null) {
+    return <span className="text-onSurface-default-tertiary">Unknown</span>;
+  }
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) {
+    return <span title={value}>{value}</span>;
+  }
+  return (
+    <time dateTime={value} title={formatBrowserLocalTimestamp(value)}>
+      {formatBrowserRelativeTimestamp(value)}
+    </time>
+  );
+}
+
+function formatTimelineTick(value: string): string {
+  return formatBrowserTimelineTick(value);
+}
+
+function timelineSummary(page: SidecarTracePage): string {
+  const visible = page.timeline.reduce(
+    (total, bucket) => total + bucket.count,
+    0,
+  );
+  return `${visible} requests across ${page.timeline.length} timeline ${page.timeline.length === 1 ? "bucket" : "buckets"}.`;
 }

@@ -4,6 +4,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 import dotenv
+import pytest
 
 try:
     from opensearchpy import AWSV4SignerAuth, OpenSearch
@@ -565,8 +566,10 @@ def test_safe_deepcopy_config_normal_configs(mock_sqlite, mock_llm_factory, mock
 @patch("mem0.utils.factory.VectorStoreFactory.create")
 @patch("mem0.utils.factory.LlmFactory.create")
 @patch("mem0.memory.storage.SQLiteManager")
+@pytest.mark.parametrize("telemetry_enabled", [False, True])
 def test_memory_initialization_opensearch_aws_auth(
-    mock_sqlite, mock_llm_factory, mock_vector_factory, mock_embedder_factory
+    mock_sqlite, mock_llm_factory, mock_vector_factory, mock_embedder_factory,
+    monkeypatch: pytest.MonkeyPatch, telemetry_enabled: bool,
 ):
     """Test that Memory initialization works with OpenSearch configs containing AWS auth."""
 
@@ -575,6 +578,7 @@ def test_memory_initialization_opensearch_aws_auth(
     mock_vector_factory.return_value = mock_vector_store
     mock_llm_factory.return_value = MagicMock()
     mock_sqlite.return_value = MagicMock()
+    monkeypatch.setattr("mem0.memory.main.MEM0_TELEMETRY", telemetry_enabled)
 
     config = MemoryConfig()
     config.vector_store.provider = "opensearch"
@@ -585,7 +589,7 @@ def test_memory_initialization_opensearch_aws_auth(
     assert memory is not None
     assert memory.config.vector_store.provider == "opensearch"
 
-    assert mock_vector_factory.call_count >= 2
+    assert mock_vector_factory.call_count == (2 if telemetry_enabled else 1)
 
 
 class TestOpenSearchFilterValidation(unittest.TestCase):

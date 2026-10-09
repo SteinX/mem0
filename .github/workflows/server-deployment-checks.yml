@@ -1,0 +1,49 @@
+name: Server, Dashboard and deployment checks
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'server/**'
+      - 'deploy/**'
+      - '.github/workflows/server-deployment-checks.yml'
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  dashboard:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server/dashboard
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10.34.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: server/dashboard/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec tsc --noEmit
+      - run: pnpm build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+
+  deployment:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Validate deployment configuration
+        run: docker compose --env-file deploy/.env.example -f deploy/docker-compose.unraid.yaml config --quiet
+      - name: Build release server
+        run: docker build --file server/release.Dockerfile --tag mem0-server-ci .
+      - name: Verify packaged SDK
+        run: >-
+          docker run --rm --network none --entrypoint python mem0-server-ci
+          -c 'from importlib.metadata import version; import mem0; assert version("mem0ai") == "2.2.1"'

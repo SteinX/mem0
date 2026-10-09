@@ -13,18 +13,20 @@ Package workflows keep their own push-to-main and manual triggers. Their `pull_r
 | Workflow | File | Standalone triggers | Runs |
 |----------|------|---------------------|------|
 | CI Gate | `ci-gate.yml` | All PRs | Routes to and aggregates everything below |
+| Server, Dashboard and deployment | `server-deployment-checks.yml` | Push to main (`server/`, `deploy/`), manual | Node 24 Dashboard typecheck/build; Compose validation and release server image build |
 | Python SDK | `ci.yml` | Push to main | Ruff + pytest on Python 3.10, 3.11, 3.12 |
 | TypeScript SDK | `ts-sdk-ci.yml` | Push to main (`mem0-ts/`) | Prettier + build + jest on Node 20, 22 |
 | Python CLI | `cli-python-ci.yml` | Push to main (`cli/python/`), manual | Ruff + pytest + hatch build on Python 3.10, 3.11, 3.12 |
 | Node CLI | `cli-node-ci.yml` | Push to main (`cli/node/`), manual | Biome + tsc + vitest + tsup on Node 20, 22 |
 | OpenClaw | `openclaw-checks.yml` | Push to main (`integrations/openclaw/`), manual | tsc + vitest (Codecov) + tsup on Node 20, 22 |
-| Mem0 Plugin | `mem0-plugin-checks.yml` | Push to main (`integrations/mem0-plugin/`, excluding `.opencode-plugin/`), manual | pytest + hook exec bits + JSON manifest validation on Python 3.10, 3.11, 3.12 |
-| OpenCode Plugin | `opencode-plugin-checks.yml` | Push to main (`.opencode-plugin/`), manual | Bun: tsc + build + dist artifact check |
+| Agent Plugins Python | `agent-plugins-python-checks.yml` | Push to main (shared Python core and native/portable plugin directories), manual | Runtime tests on Python 3.10; full pytest on 3.11, 3.12; ruff + generated-package drift on 3.12 |
+| Agent Plugins TypeScript | `agent-plugins-typescript-checks.yml` | Push to main (`integrations/agent-plugin-core/typescript/`), manual | tsc + node:test on Node 22 |
+| OpenCode Plugin | `opencode-plugin-checks.yml` | Push to main (`integrations/opencode-plugin/`), manual | Bun: tsc + build + dist artifact check |
 | Pi Agent Plugin | `pi-agent-plugin-checks.yml` | Push to main (`integrations/pi-agent-plugin/`), manual | tsc + vitest + tsup on Node 20, 22 |
-| DeepSeek Harness Plugin | `dsh-mem0-checks.yml` | Push to main (`integrations/dsh-mem0/`), manual | tsc + vitest + tsup on Node 20, 22 |
+| DeepSeek Harness Plugin | `deepseek-plugin-checks.yml` | Push to main (`integrations/deepseek-plugin/`), manual | tsc + vitest + tsup on Node 20, 22 |
 | n8n Node | `n8n-nodes-mem0-checks.yml` | Push to main (`integrations/n8n-nodes-mem0/`), manual | ESLint + tsc build on Node 20 |
 | Zapier App | `zapier-mem0-checks.yml` | Push to main (`integrations/zapier-mem0/`), manual | tsc + `zapier validate` + offline unit tests on Node 22 |
-| strands-mem0 | `strands-mem0-checks.yml` | Push to main (`integrations/strands-mem0/`), manual | Ruff + mypy + pytest + hatch build on Python 3.10, 3.11, 3.12 |
+| mem0-strands | `mem0-strands-checks.yml` | Push to main (`integrations/mem0-strands/`), manual | Ruff + mypy + pytest + hatch build on Python 3.10, 3.11, 3.12 |
 | docs llms.txt | `docs-llms-txt-check.yml` | Manual | `docs/llms.txt` coverage |
 | GitHub Scripts | inline in `ci-gate.yml` | none | `node` over every `.github/scripts/*.test.js` |
 
@@ -60,9 +62,9 @@ Requiring `CI Gate` also means fork PRs from first-time contributors cannot merg
 | OpenClaw | `openclaw-cd.yml` | `openclaw-v*` | npm (`@mem0/openclaw-mem0`) |
 | OpenCode Plugin | `opencode-plugin-cd.yml` | `opencode-v*` | npm (`@mem0/opencode-plugin`) |
 | Pi Agent Plugin | `pi-agent-plugin-cd.yml` | `pi-agent-v*` | npm (`@mem0/pi-agent-plugin`) |
-| DeepSeek Harness Plugin | `dsh-mem0-cd.yml` | `dsh-mem0-v*` | npm (`@mem0/dsh-mem0`) |
+| DeepSeek Harness Plugin | `deepseek-plugin-cd.yml` | `deepseek-plugin-v*` | npm (`@mem0/deepseek-plugin`) |
 | n8n Node | `n8n-nodes-mem0-cd.yml` | `n8n-nodes-mem0-v*` | npm (`@mem0/n8n-nodes-mem0`) |
-| strands-mem0 | `strands-mem0-cd.yml` | `strands-mem0-v*` | PyPI (`strands-mem0`) |
+| mem0-strands | `mem0-strands-cd.yml` | `mem0-strands-v*` | PyPI (`mem0-strands`) |
 
 - Package CD workflows are `workflow_dispatch`-only, with `tag` and `prerelease` inputs. They check out and build the given tag.
 - All publishing uses **OIDC trusted publishing**. No tokens, no secrets.

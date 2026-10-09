@@ -26,8 +26,8 @@ export default function DashboardLayout({
           width: `calc(100vw - ${isSidebarCollapsed ? COLLAPSED_SIDEBAR_WIDTH + 8 : SIDEBAR_WIDTH + 8}px)`,
         }}
       >
-        <ScrollArea type="scroll" className="h-[calc(100vh-70px)]">
-          <div className="mx-auto px-6 py-6 flex-1 flex-col space-y-4">
+        <ScrollArea type="scroll" className="h-[calc(100vh-70px)] min-w-0">
+          <div className="mx-auto w-full min-w-0 max-w-full px-6 py-6 flex-1 flex-col space-y-4">
             {children}
           </div>
         </ScrollArea>

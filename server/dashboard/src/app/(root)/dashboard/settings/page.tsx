@@ -96,7 +96,7 @@ export default function SettingsPage() {
           <CardTitle className="text-sm">Profile</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1">
               <Label htmlFor="settings-name" className="text-xs">
                 Name
@@ -144,7 +144,7 @@ export default function SettingsPage() {
               onChange={(e) => setCurrentPassword(e.target.value)}
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1">
               <Label htmlFor="settings-new-password" className="text-xs">
                 New password
