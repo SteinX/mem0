@@ -25,6 +25,12 @@ EXPECTED_MCP_CREDENTIAL_KIND = os.environ.get(
     "MEM0_CANARY_EXPECTED_CREDENTIAL_KIND",
     "core_api_key",
 )
+_consolidation_expected = os.environ.get(
+    "MEM0_CANARY_EXPECT_CONSOLIDATION_ENABLED", "false"
+).strip().lower()
+if _consolidation_expected not in {"true", "false"}:
+    raise ValueError("MEM0_CANARY_EXPECT_CONSOLIDATION_ENABLED must be true or false")
+EXPECTED_CONSOLIDATION_ENABLED = _consolidation_expected == "true"
 
 
 class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -532,8 +538,8 @@ def main() -> dict[str, Any]:
     require_status(status, 200, "consolidation status", consolidation)
     if consolidation.get("bridge_routing_ready") is not True:
         raise RuntimeError("MCP bridge routing heartbeat is not ready")
-    if consolidation.get("consolidation_enabled") is not True:
-        raise RuntimeError("server-side consolidation is not enabled")
+    if consolidation.get("consolidation_enabled") is not EXPECTED_CONSOLIDATION_ENABLED:
+        raise RuntimeError("server-side consolidation did not match the configured expectation")
     if consolidation.get("hard_delete_enabled") is not False:
         raise RuntimeError("consolidation hard delete is not disabled")
 
@@ -556,7 +562,7 @@ def main() -> dict[str, Any]:
         "app_id": app_id,
         "event_correlations": len(request_ids),
         "bridge_routing_ready": True,
-        "consolidation_enabled": True,
+        "consolidation_enabled": consolidation["consolidation_enabled"],
         "hard_delete_enabled": False,
         "mcp_client": {
             "credential_kind": credential_kind,
