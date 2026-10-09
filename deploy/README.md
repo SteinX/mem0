@@ -47,7 +47,8 @@ In `SteinX/mem0`, publishing a GitHub Release with a version tag such as
 Image` with the original release context. It builds
 the exact tagged commit and publishes `ghcr.io/steinx/mem0:<tag>` and a
 `sha-<short-commit>` tag. Automatic stable releases update `latest` only when
-their tag matches GitHub's latest stable Release at publication time;
+their tag matches GitHub's latest stable Release after the immutable image has
+been built and pushed, immediately before promoting its digest;
 prereleases do not. Publication runs share one queue, preserving up to 100
 pending runs and serializing updates across release tags. Saving a draft or
 pushing a Git tag alone does not publish an image. The router remains the only

@@ -121,15 +121,15 @@ def test_reusable_publisher_and_tag_selection_are_wired() -> None:
     assert "persist-credentials: false" in workflow
     assert "type=raw,value=${{ env.IMAGE_TAG }}" in workflow
     assert "PUSH_LATEST: ${{ inputs.push_latest }}" in workflow
-    assert "type=raw,value=latest,enable=${{ steps.latest.outputs.push_latest }}" in workflow
+    assert "type=raw,value=latest" not in workflow
+    assert "if: steps.latest.outputs.push_latest == 'true'" in workflow
     assert workflow.index("- name: Resolve release commit") < workflow.index("- name: Log in to GHCR")
-    assert workflow.index("- name: Decide latest promotion") < workflow.index("- name: Image metadata")
+    assert workflow.index("- name: Image metadata") < workflow.index("- name: Build and push server image")
 
 
-def test_latest_decision_precedes_registry_login() -> None:
+def test_source_verification_precedes_registry_login() -> None:
     workflow = WORKFLOW.read_text()
-    decision = workflow.index("- name: Decide latest promotion")
-    assert workflow.index("- name: Resolve release commit") < decision < workflow.index("- name: Log in to GHCR")
+    assert workflow.index("- name: Resolve release commit") < workflow.index("- name: Log in to GHCR")
 
 
 def test_publications_share_a_preserving_queue() -> None:
@@ -249,3 +249,39 @@ def test_router_changes_select_the_deployment_checks() -> None:
     assert "              - '.github/workflows/release.yml'" in gate.split("            server_deployment:\n", 1)[1]
     assert "      - '.github/workflows/release.yml'" in checks
     assert "python -m pytest deploy/test_publish_workflow.py -q" in checks
+
+
+def test_latest_promotion_after_immutable_builds() -> None:
+    workflow = WORKFLOW.read_text()
+    assert (
+        workflow.index("- name: Build and push server image")
+        < workflow.index("- name: Decide latest promotion")
+        < workflow.index("- name: Promote latest")
+    )
+    assert "if: steps.latest.outputs.push_latest == 'true'" in workflow
+
+
+def test_latest_promotion_uses_the_built_source(tmp_path: Path) -> None:
+    image = "ghcr.io/steinx/mem0"
+    digest = "sha256:" + "a" * 64
+    docker = tmp_path / "docker"
+    docker.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$DOCKER_CALLS"\n')
+    docker.chmod(0o755)
+    calls = tmp_path / "docker-calls.txt"
+    result = subprocess.run(
+        ["bash", "-e", "-o", "pipefail", "-c", workflow_script("Promote latest")],
+        env={
+            **os.environ,
+            "PATH": f"{tmp_path}:{os.environ['PATH']}",
+            "DOCKER_CALLS": str(calls),
+            "IMAGE_NAME": image,
+            "IMAGE_DIGEST": digest,
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert calls.read_text().splitlines() == [
+        f"buildx imagetools create --prefer-index=false --tag {image}:latest {image}@{digest}",
+    ]
