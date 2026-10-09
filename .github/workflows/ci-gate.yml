@@ -150,6 +150,7 @@ jobs:
             server_deployment:
               - 'server/**'
               - 'deploy/**'
+              - '.github/workflows/publish-server-image.yml'
               - '.github/workflows/server-deployment-checks.yml'
               - '.github/workflows/ci-gate.yml'
 
