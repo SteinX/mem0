@@ -49,6 +49,7 @@ jobs:
       mem0_strands: ${{ steps.filter.outputs.mem0_strands }}
       docs_llms_txt: ${{ steps.filter.outputs.docs_llms_txt }}
       github_scripts: ${{ steps.filter.outputs.github_scripts }}
+      server_deployment: ${{ steps.filter.outputs.server_deployment }}
     steps:
       - uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3
         id: filter
@@ -146,6 +147,11 @@ jobs:
               - '.github/workflows/vouch-check-pr.yml'
               - '.github/workflows/issue-labeler.yml'
               - '.github/workflows/ci-gate.yml'
+            server_deployment:
+              - 'server/**'
+              - 'deploy/**'
+              - '.github/workflows/server-deployment-checks.yml'
+              - '.github/workflows/ci-gate.yml'
 
   python-sdk:
     name: Python SDK
@@ -153,6 +159,12 @@ jobs:
     if: needs.changes.outputs.python_sdk == 'true'
     uses: ./.github/workflows/ci.yml
     secrets: inherit
+
+  server-deployment:
+    name: Server, Dashboard and deployment
+    needs: changes
+    if: needs.changes.outputs.server_deployment == 'true'
+    uses: ./.github/workflows/server-deployment-checks.yml
 
   ts-sdk:
     name: TypeScript SDK
@@ -287,6 +299,7 @@ jobs:
       - mem0-strands
       - docs-llms-txt
       - github-scripts
+      - server-deployment
     if: always()
     runs-on: ubuntu-latest
     steps:

@@ -13,6 +13,7 @@ Package workflows keep their own push-to-main and manual triggers. Their `pull_r
 | Workflow | File | Standalone triggers | Runs |
 |----------|------|---------------------|------|
 | CI Gate | `ci-gate.yml` | All PRs | Routes to and aggregates everything below |
+| Server, Dashboard and deployment | `server-deployment-checks.yml` | Push to main (`server/`, `deploy/`), manual | Node 24 Dashboard typecheck/build; Compose validation and release server image build |
 | Python SDK | `ci.yml` | Push to main | Ruff + pytest on Python 3.10, 3.11, 3.12 |
 | TypeScript SDK | `ts-sdk-ci.yml` | Push to main (`mem0-ts/`) | Prettier + build + jest on Node 20, 22 |
 | Python CLI | `cli-python-ci.yml` | Push to main (`cli/python/`), manual | Ruff + pytest + hatch build on Python 3.10, 3.11, 3.12 |
