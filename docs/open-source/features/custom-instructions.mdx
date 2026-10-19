@@ -234,7 +234,9 @@ scopes. User-fact rules exclude assistant suggestions and speculation. A custom
 per-call `prompt` remains available alongside these rules. `AsyncMemory.add`
 accepts the same policy; the REST `/memories` endpoint accepts its JSON form.
 
-Explicit metadata categories override classification. Explicit `expiration_date`,
+Explicit `metadata.categories`, `metadata.category`, and `metadata.custom_category`
+override classification. Generic `metadata.type` is preserved without overriding
+the inferred category or its TTL. Explicit `expiration_date`,
 including null, overrides automatic TTL. TTL is optional and applies only to
 configured temporary categories. Expired facts are hidden from ordinary reads;
 `show_expired=True` and exact ID reads preserve access, and an update with
