@@ -272,6 +272,15 @@ curl -X POST http://localhost:8888/search \
 
 Each returned memory includes `score_details` only when explanation mode is enabled.
 
+Search also accepts boolean `rerank` and `latest_only` options. `rerank: true`
+uses the configured reranker; the REST server returns HTTP 503 when none is
+configured. `latest_only: true` excludes candidates whose metadata contains a
+non-empty `superseded_by` marker before ranking and `top_k` selection. Omission
+or `false` preserves historical results. This option does not infer replacement
+relationships, sort by storage time, or hide unclassified memories.
+The same `latest_only` keyword is available on Python `Memory.search` and
+`AsyncMemory.search`.
+
 ### Explore with OpenAPI docs
 
 1. Navigate to `http://localhost:8888/docs` (Compose) or `http://localhost:8000/docs` (raw Docker / uvicorn).

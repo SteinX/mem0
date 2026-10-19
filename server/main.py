@@ -215,6 +215,7 @@ class SearchRequest(BaseModel):
     explain: Optional[bool] = Field(None, description="Include score details for each search result.")
     show_expired: Optional[bool] = Field(None, description="Include expired memories.")
     rerank: StrictBool | None = Field(None, description="Rerank results with the configured reranker.")
+    latest_only: StrictBool | None = Field(None, description="Exclude memories with an explicit superseded_by marker.")
 
 
 class GenerateInstructionsRequest(BaseModel):
@@ -606,6 +607,8 @@ def search_memories(search_req: SearchRequest, _auth=Depends(verify_auth)):
             params["explain"] = search_req.explain
         if search_req.show_expired is not None:
             params["show_expired"] = search_req.show_expired
+        if search_req.latest_only is not None:
+            params["latest_only"] = search_req.latest_only
         memory = get_memory_instance()
         if search_req.rerank is not None:
             if search_req.rerank and memory.reranker is None:

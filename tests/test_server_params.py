@@ -173,6 +173,31 @@ class TestSearchRerank:
 # SearchRequest: top_k + threshold together
 # ===========================================================================
 
+class TestSearchLatestOnly:
+    @pytest.mark.parametrize("latest_only", [True, False])
+    def test_latest_only_forwarded(self, client, mock_memory, latest_only):
+        response = client.post("/search", json={
+            "query": "current state", "filters": {"user_id": "u1"}, "latest_only": latest_only,
+        })
+
+        assert response.status_code == 200
+        assert mock_memory.search.call_args.kwargs["latest_only"] is latest_only
+
+    @pytest.mark.parametrize("latest_only", ["false", 1, {}])
+    def test_invalid_latest_only_is_rejected_before_search(self, client, mock_memory, latest_only):
+        response = client.post("/search", json={
+            "query": "current state", "filters": {"user_id": "u1"}, "latest_only": latest_only,
+        })
+
+        assert response.status_code == 422
+        mock_memory.search.assert_not_called()
+
+    def test_omitted_latest_only_preserves_sdk_default(self, client, mock_memory):
+        response = client.post("/search", json={"query": "state", "filters": {"user_id": "u1"}})
+
+        assert response.status_code == 200
+        assert "latest_only" not in mock_memory.search.call_args.kwargs
+
 class TestSearchLimitAndThreshold:
 
     def test_both_forwarded(self, client, mock_memory):

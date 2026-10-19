@@ -597,6 +597,15 @@ class EvidenceStore:
         # Keep the legacy table name so existing databases and in-flight workers remain compatible.
         self.conn.executescript(
             """
+            CREATE TABLE IF NOT EXISTS automatic_recalls (
+                repo_id TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                attempts INTEGER NOT NULL DEFAULT 0,
+                completed INTEGER NOT NULL DEFAULT 0,
+                active_until REAL NOT NULL DEFAULT 0,
+                PRIMARY KEY(repo_id, session_id)
+            );
+
             CREATE TABLE IF NOT EXISTS events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 repo_id TEXT NOT NULL,
@@ -1145,6 +1154,37 @@ class EvidenceStore:
                 ),
             )
 
+    def claim_automatic_recall(self, repo_id: str, session_id: str) -> bool:
+        now = time.time()
+        with self.conn:
+            self.conn.execute(
+                """INSERT OR IGNORE INTO automatic_recalls(repo_id, session_id, attempts)
+                   SELECT ?, ?, COUNT(*) FROM operations
+                   WHERE repo_id = ? AND session_id = ? AND operation = 'first-prompt-search'""",
+                (repo_id, session_id, repo_id, session_id),
+            )
+            claimed = self.conn.execute(
+                """UPDATE automatic_recalls
+                   SET attempts = attempts + 1, active_until = ?
+                   WHERE repo_id = ? AND session_id = ?
+                     AND completed = 0 AND attempts < 2 AND active_until <= ?
+                     AND NOT EXISTS (
+                       SELECT 1 FROM operations
+                       WHERE repo_id = ? AND session_id = ?
+                         AND operation = 'first-prompt-search' AND success = 1
+                     )""",
+                (now + 3, repo_id, session_id, now, repo_id, session_id),
+            )
+        return claimed.rowcount == 1
+
+    def finish_automatic_recall(self, repo_id: str, session_id: str, succeeded: bool) -> None:
+        with self.conn:
+            self.conn.execute(
+                """UPDATE automatic_recalls SET completed = completed OR ?, active_until = 0
+                   WHERE repo_id = ? AND session_id = ?""",
+                (succeeded, repo_id, session_id),
+            )
+
     def has_operation(self, repo_id: str, session_id: str, operation: str) -> bool:
         row = self.conn.execute(
             """SELECT 1 FROM operations
@@ -1207,6 +1247,7 @@ class EvidenceStore:
 
     def forget_local_repo(self, repo_id: str) -> dict[str, int]:
         tables = {
+            "automatic_recalls": "repo_id",
             "events": "repo_id",
             "session_scopes": "repo_id",
             "flushes": "repo_id",
@@ -1842,6 +1883,28 @@ def _request_json(
     return parsed, len(raw), len(response_raw)
 
 
+def _request_json_with_deadline(
+    url: str, key: str, payload: dict[str, Any], timeout: float
+) -> tuple[dict[str, Any] | list[Any], int, int]:
+    if timeout <= 0:
+        raise TimeoutError("Automatic recall deadline exceeded")
+    try:
+        result = subprocess.run(
+            [sys.executable, str(Path(__file__).resolve())],
+            input=json.dumps({"url": url, "key": key, "payload": payload, "timeout": timeout}),
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise TimeoutError("Automatic recall deadline exceeded") from exc
+    if result.returncode:
+        raise urllib.error.URLError(redact(result.stderr[-1000:]))
+    response, request_chars, response_chars = json.loads(result.stdout)
+    return response, request_chars, response_chars
+
+
 def _request_json_with_network_retry(
     url: str, key: str, payload: dict[str, Any], timeout: float
 ) -> tuple[dict[str, Any] | list[Any], int, int]:
@@ -2283,6 +2346,7 @@ def search_memories(
     run_id: str | None = None,
     operation: str = "search",
     timeout: float = 5,
+    deadline: float | None = None,
 ) -> MemorySearchResult:
     key = api_key()
     if not key or not query.strip():
@@ -2335,9 +2399,14 @@ def search_memories(
     )
     started = time.perf_counter()
     try:
-        response, request_chars, response_chars = _request_json_with_network_retry(
-            url, key, payload, timeout
-        )
+        if deadline is None:
+            response, request_chars, response_chars = _request_json_with_network_retry(
+                url, key, payload, timeout
+            )
+        else:
+            response, request_chars, response_chars = _request_json_with_deadline(
+                url, key, payload, min(timeout, deadline - time.monotonic())
+            )
         memories = (
             response if isinstance(response, list) else response.get("results", [])
         )
@@ -2420,7 +2489,11 @@ def format_context(
         ),
         10000,
     )
-    lines = [heading] if heading else []
+    notice = (
+        "Similarity order indicates relevance, not factual priority. Storage timestamps are not "
+        "fact-validity times; state=unknown means no explicit current/history classification."
+    )
+    lines = [heading, notice] if heading else [notice]
     for memory in memories:
         text = re.sub(
             r"\s+",
@@ -2430,21 +2503,37 @@ def format_context(
         text = text.strip()
         if not text:
             continue
-        branch = str((memory.get("metadata") or {}).get("branch") or "").strip()
+        metadata = memory.get("metadata") or {}
+        branch = str(metadata.get("branch") or "").strip()
         branch_label = (
             f" [learnt on branch {branch}]"
             if branch.casefold() not in {"", "main", "master", "unknown", "detached"}
             else ""
         )
-        number = len(lines) if heading else len(lines) + 1
-        entry = f"{number}. {text}{branch_label}"
+        superseded_by = metadata.get("superseded_by") or memory.get("superseded_by")
+        state = "historical" if superseded_by else metadata.get("state", "unknown")
+        if state not in ("current", "historical"):
+            state = "unknown"
+        labels = [
+            f"id={bounded(memory.get('id') or 'unknown', 100)}",
+            f"state={state}",
+            f"created_at={bounded(memory.get('created_at') or 'unknown', 50)}",
+            f"updated_at={bounded(memory.get('updated_at') or 'unknown', 50)}",
+        ]
+        for key in ("valid_from", "valid_to", "superseded_by"):
+            value = metadata.get(key) or memory.get(key)
+            if value:
+                labels.append(f"{key}={bounded(value, 100)}")
+        suffix = f"{branch_label} [{'; '.join(labels)}]"
+        number = len(lines) - (1 if heading else 0)
+        entry = f"{number}. {text}{suffix}"
         candidate = "\n".join([*lines, entry])
         if len(candidate) <= limit:
             lines.append(entry)
             continue
-        if not lines or (heading and len(lines) == 1):
+        if len(lines) == (2 if heading else 1):
             prefix = f"{number}. "
-            suffix = f"…{branch_label}"
+            suffix = f"…{suffix}"
             available = (
                 limit
                 - len("\n".join(lines))
@@ -2455,7 +2544,7 @@ def format_context(
             if available > 0:
                 lines.append(prefix + text[:available].rstrip() + suffix)
         break
-    minimum_lines = 2 if heading else 1
+    minimum_lines = 3 if heading else 2
     return "\n".join(lines) if len(lines) >= minimum_lines else ""
 
 
@@ -2673,3 +2762,7 @@ def doctor(cwd: str | None = None) -> dict[str, Any]:
         "user_id": user_id(),
         "checks": checks,
     }
+
+
+if __name__ == "__main__":
+    json.dump(_request_json_with_network_retry(**json.load(sys.stdin)), sys.stdout)
