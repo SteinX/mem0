@@ -60,20 +60,22 @@ def default_record_stop(store: EvidenceStore, hook_input: dict):
 
 
 def first_prompt_memory_output(store: EvidenceStore, hook_input: dict) -> dict:
-    """Search once before the agent handles the first prompt in a session."""
-    repo, session_id, prompt, is_first_prompt = record_user_prompt(store, hook_input)
-    if not is_first_prompt:
-        return {}
+    """Recall on an eligible prompt, allowing one later retry after failure."""
+    repo, session_id, prompt, _ = record_user_prompt(store, hook_input)
     try:
         minimum_query_chars = int(os.environ.get("MEM0_CODE_MIN_QUERY_CHARS", "20"))
     except ValueError:
         minimum_query_chars = 20
     if len(prompt.strip()) < max(minimum_query_chars, 1):
         return {}
+    if not store.claim_automatic_recall(repo.identity, session_id):
+        return {}
     result = search_memories(
         store, repo, session_id, bounded(prompt, 6000),
         top_k=5, operation="first-prompt-search", timeout=2,
+        deadline=time.monotonic() + 2,
     )
+    store.finish_automatic_recall(repo.identity, session_id, result.succeeded)
     if not result.memories:
         return {}
     context = format_context(
