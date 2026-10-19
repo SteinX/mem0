@@ -53,3 +53,11 @@ jobs:
         run: >-
           docker run --rm --network none --entrypoint python mem0-server-ci
           -c 'from importlib.metadata import version; import mem0; assert version("mem0ai") == "2.2.1"'
+      - name: Build retrieval server
+        run: >-
+          docker build --file server/retrieval.Dockerfile
+          --build-arg CORE_IMAGE=mem0-server-ci --tag mem0-retrieval-ci .
+      - name: Verify offline retrieval runtime
+        run: >-
+          docker run --rm -i --network none --entrypoint python mem0-retrieval-ci
+          < deploy/check_retrieval_image.py

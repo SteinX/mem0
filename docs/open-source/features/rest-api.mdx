@@ -273,6 +273,13 @@ curl -X POST http://localhost:8888/search \
 Each returned memory includes `score_details` only when explanation mode is enabled.
 
 Search also accepts boolean `rerank` and `latest_only` options. `rerank: true`
+requires the configured reranker's dependencies and model files. Fork server
+releases also publish a `-retrieval` image variant built from the same base
+image digest, bundling CPU PyTorch, Transformers, the pinned BGE reranker at
+`/opt/models/bge-reranker-base`, and the English NLP model. Use this variant
+when retaining a configuration that references that local model path.
+
+`rerank: true`
 uses the configured reranker; the REST server returns HTTP 503 when none is
 configured. `latest_only: true` excludes candidates whose metadata contains a
 non-empty `superseded_by` marker before ranking and `top_k` selection. Omission

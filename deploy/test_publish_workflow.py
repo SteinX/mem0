@@ -261,6 +261,23 @@ def test_latest_promotion_after_immutable_builds() -> None:
     assert "if: steps.latest.outputs.push_latest == 'true'" in workflow
 
 
+def test_retrieval_images_are_built_and_verified_before_promotion() -> None:
+    workflow = WORKFLOW.read_text()
+    checks = WORKFLOW.with_name("server-deployment-checks.yml").read_text()
+    assert "file: server/retrieval.Dockerfile" in workflow
+    assert "CORE_IMAGE=${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}" in workflow
+    assert "value=${{ env.IMAGE_TAG }}-retrieval" in workflow
+    assert workflow.index("- name: Verify offline retrieval runtime") < workflow.index("- name: Decide latest promotion")
+    assert "< deploy/check_retrieval_image.py" in workflow
+    assert "--network none --entrypoint python" in workflow
+    assert "--tag mem0-retrieval-ci" in checks
+    assert "< deploy/check_retrieval_image.py" in checks
+    promotion = workflow.split("      - name: Promote retrieval latest\n", 1)[1].split("      - name:", 1)[0]
+    assert "if: steps.latest.outputs.push_latest == 'true'" in promotion
+    assert "${{ steps.retrieval-build.outputs.digest }}" in promotion
+    assert '--tag "$IMAGE_NAME:latest-retrieval" "$IMAGE_NAME@$IMAGE_DIGEST"' in promotion
+
+
 def test_latest_promotion_uses_the_built_source(tmp_path: Path) -> None:
     image = "ghcr.io/steinx/mem0"
     digest = "sha256:" + "a" * 64
