@@ -136,6 +136,39 @@ class TestSearchExplain:
         assert "explain" not in kwargs
 
 
+class TestSearchRerank:
+    @pytest.mark.parametrize("rerank", [True, False])
+    def test_rerank_forwarded(self, client: TestClient, mock_memory: MagicMock, rerank: bool) -> None:
+        response = client.post("/search", json={"query": "中文检索", "filters": {"user_id": "u1"}, "rerank": rerank})
+
+        assert response.status_code == 200
+        assert mock_memory.search.call_args.kwargs["rerank"] is rerank
+
+    def test_omitted_rerank_preserves_sdk_default(self, client: TestClient, mock_memory: MagicMock) -> None:
+        response = client.post("/search", json={"query": "q", "filters": {"user_id": "u1"}})
+
+        assert response.status_code == 200
+        assert "rerank" not in mock_memory.search.call_args.kwargs
+
+    @pytest.mark.parametrize("rerank", ["false", 1, {}])
+    def test_invalid_rerank_is_rejected_before_search(
+        self, client: TestClient, mock_memory: MagicMock, rerank: str | int | dict[str, str]
+    ) -> None:
+        response = client.post("/search", json={"query": "q", "filters": {"user_id": "u1"}, "rerank": rerank})
+
+        assert response.status_code == 422
+        mock_memory.search.assert_not_called()
+
+    def test_requested_rerank_without_provider_fails_explicitly(
+        self, client: TestClient, mock_memory: MagicMock
+    ) -> None:
+        mock_memory.reranker = None
+
+        response = client.post("/search", json={"query": "q", "filters": {"user_id": "u1"}, "rerank": True})
+
+        assert response.status_code == 503
+        mock_memory.search.assert_not_called()
+
 # ===========================================================================
 # SearchRequest: top_k + threshold together
 # ===========================================================================

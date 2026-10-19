@@ -4,8 +4,8 @@ import os
 import time
 from typing import Any, Dict, List, Optional
 
-import telemetry
 import mutation_receipts
+import telemetry
 from auth import (
     ADMIN_API_KEY,
     AUTH_DISABLED,
@@ -27,10 +27,8 @@ from errors import (
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
-from mem0.exceptions import ValidationError as Mem0ValidationError
-from mem0.memory.main import _validate_and_trim_entity_id, _vector_store_list_rows
 from models import RequestLog, User
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictBool
 from rate_limit import limiter
 from routers import api_keys as api_keys_router
 from routers import auth as auth_router
@@ -47,6 +45,9 @@ from server_state import (
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import func, select
+
+from mem0.exceptions import ValidationError as Mem0ValidationError
+from mem0.memory.main import _validate_and_trim_entity_id, _vector_store_list_rows
 
 load_dotenv()
 
@@ -213,6 +214,7 @@ class SearchRequest(BaseModel):
     threshold: Optional[float] = Field(None, description="Minimum similarity score for results.")
     explain: Optional[bool] = Field(None, description="Include score details for each search result.")
     show_expired: Optional[bool] = Field(None, description="Include expired memories.")
+    rerank: StrictBool | None = Field(None, description="Rerank results with the configured reranker.")
 
 
 class GenerateInstructionsRequest(BaseModel):
@@ -604,7 +606,12 @@ def search_memories(search_req: SearchRequest, _auth=Depends(verify_auth)):
             params["explain"] = search_req.explain
         if search_req.show_expired is not None:
             params["show_expired"] = search_req.show_expired
-        return get_memory_instance().search(query=search_req.query, filters=filters, **params)
+        memory = get_memory_instance()
+        if search_req.rerank is not None:
+            if search_req.rerank and memory.reranker is None:
+                raise HTTPException(status_code=503, detail="Reranking is not configured for this server.")
+            params["rerank"] = search_req.rerank
+        return memory.search(query=search_req.query, filters=filters, **params)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except HTTPException:

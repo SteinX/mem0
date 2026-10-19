@@ -152,6 +152,35 @@ const memory = new Memory({
 - **Reordered results:** Mem0 sorts responses using the reranker’s scores before returning them.
 - **Optional fallbacks:** Toggle reranking per request or disable it entirely if performance or cost becomes a concern.
 
+## Self-hosted REST server
+
+The Python REST server accepts optional boolean `rerank` and `explain` fields on
+`POST /search`. Configure a reranker first through the administrator-only
+`POST /configure` endpoint. Setting `rerank` to `true` without a configured provider
+returns HTTP 503. Omitting it or sending `false` keeps the SDK's default search
+behavior. Strings such as `"true"` are rejected rather than coerced.
+
+```bash
+curl "$MEM0_API_URL/search" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $MEM0_API_KEY" \
+  -d '{"query":"What language should I use?","filters":{"user_id":"example-user"},"top_k":20,"rerank":true,"explain":true}'
+```
+
+Reranked results include `rerank_score`; `score` and `score_details` retain the
+original hybrid scoring information. Preserve the returned order when consuming
+reranked results. Reranking reorders the retrieved candidates, so compare quality
+with a fixed candidate budget.
+
+The optional `server/retrieval.Dockerfile` packages CPU reranking and the default
+English spaCy model for offline inference. See `server/RETRIEVAL.md` for its pinned
+dependencies and model configuration. `MEM0_NLP_ENABLED=false` disables entity
+extraction and lemmatization for the process, retaining the original-text
+fallback. Omission or `true` keeps NLP enabled. Set this before starting the
+process; changing the environment requires a restart. Installing NLP does not
+rebuild historical entity or lexical indexes, and English NLP should be evaluated
+before enabling it for Chinese or identifier-heavy data.
+
 <AccordionGroup>
   <Accordion title="Supported providers">
     - **[Cohere](/components/rerankers/models/cohere)**: Multilingual hosted reranker with API-based scoring.  
@@ -193,7 +222,7 @@ m = Memory.from_config(config)
 ```
 
 <Info icon="check">
-  Confirm `results["results"][0]["score"]` reflects the reranker output: if the field is missing, the reranker was not applied.
+  Inspect `results["results"][0]["rerank_score"]` for reranker output. The original hybrid `score` is preserved; its presence alone does not prove reranking ran.
 </Info>
 
 <Tip>

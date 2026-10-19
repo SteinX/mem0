@@ -7,9 +7,12 @@ each loading their own copy from disk.
 """
 
 import logging
+import os
 import threading
+from typing import Final
 
 logger = logging.getLogger(__name__)
+_NLP_ENABLED: Final = os.environ.get("MEM0_NLP_ENABLED", "true").lower() not in {"0", "false", "no", "off"}
 
 _nlp_full = None
 _nlp_lemma = None
@@ -44,6 +47,8 @@ def _ensure_model_available():
 def get_nlp_full():
     """Return spaCy model with all pipelines (NER, tagger, etc.) for entity extraction."""
     global _nlp_full, _load_failed_full
+    if not _NLP_ENABLED:
+        return None
     if _load_failed_full:
         return None
     if _nlp_full is not None:
@@ -69,6 +74,8 @@ def get_nlp_full():
 def get_nlp_lemma():
     """Return spaCy model with only lemmatizer for BM25 text processing."""
     global _nlp_lemma, _load_failed_lemma
+    if not _NLP_ENABLED:
+        return None
     if _load_failed_lemma:
         return None
     if _nlp_lemma is not None:
