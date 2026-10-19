@@ -207,6 +207,41 @@ await memory.add("I like going to hikes", { userId: "user123" });
 
 ---
 
+## Per-call classification and expiration in the self-hosted fork
+
+The self-hosted SDK and REST server accept an optional `extraction_policy` on
+add operations. It extends the existing single extraction call with category
+descriptions. Inferred facts persist the chosen category, `memory_kind`, and
+`extraction_policy_version`. An invalid model category fails before insertion.
+Without a policy, existing extraction behavior is preserved.
+
+```python
+from mem0.configs.extraction import ExtractionCategory, ExtractionPolicy
+
+policy = ExtractionPolicy(
+    version=1,
+    fact_kind="user_fact",
+    categories=[
+        ExtractionCategory(name="preferences", description="Verified user preferences"),
+        ExtractionCategory(name="temporary", description="Temporary work items", ttl_days=7),
+    ],
+)
+memory.add("Please reply in Chinese", user_id="alice", extraction_policy=policy)
+```
+
+Use `agent_experience` for demonstrated procedures and outcomes in agent-only
+scopes. User-fact rules exclude assistant suggestions and speculation. A custom
+per-call `prompt` remains available alongside these rules. `AsyncMemory.add`
+accepts the same policy; the REST `/memories` endpoint accepts its JSON form.
+
+Explicit metadata categories override classification. Explicit `expiration_date`,
+including null, overrides automatic TTL. TTL is optional and applies only to
+configured temporary categories. Expired facts are hidden from ordinary reads;
+`show_expired=True` and exact ID reads preserve access, and an update with
+`expiration_date=None` clears expiration. No historical backfill or deletion runs.
+`infer=False` bypasses extraction and classification. Test representative positive
+and irrelevant transcripts against your actual model before enabling a policy.
+
 ## Best practices
 
 1. **Be precise:** Call out the exact categories or fields you want to capture.
