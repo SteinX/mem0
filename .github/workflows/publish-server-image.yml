@@ -112,6 +112,40 @@ jobs:
           cache-from: type=gha,scope=server
           cache-to: type=gha,scope=server,mode=max
 
+      - name: Retrieval image metadata
+        id: retrieval-meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ env.IMAGE_TAG }}-retrieval
+            type=raw,value=sha-${{ steps.release.outputs.short_sha }}-retrieval
+          labels: |
+            org.opencontainers.image.revision=${{ steps.release.outputs.sha }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ env.IMAGE_TAG }}-retrieval
+
+      - name: Build and push retrieval server image
+        id: retrieval-build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        with:
+          context: .
+          file: server/retrieval.Dockerfile
+          build-args: CORE_IMAGE=${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+          push: true
+          platforms: linux/amd64
+          tags: ${{ steps.retrieval-meta.outputs.tags }}
+          labels: ${{ steps.retrieval-meta.outputs.labels }}
+          cache-from: type=gha,scope=server-retrieval
+          cache-to: type=gha,scope=server-retrieval,mode=max
+
+      - name: Verify offline retrieval runtime
+        env:
+          RETRIEVAL_IMAGE: ${{ env.IMAGE_NAME }}@${{ steps.retrieval-build.outputs.digest }}
+        run: |
+          docker pull "$RETRIEVAL_IMAGE"
+          docker run --rm -i --network none --entrypoint python "$RETRIEVAL_IMAGE" < deploy/check_retrieval_image.py
+
       - name: Decide latest promotion
         id: latest
         env:
@@ -136,6 +170,14 @@ jobs:
           docker buildx imagetools create --prefer-index=false \
             --tag "$IMAGE_NAME:latest" "$IMAGE_NAME@$IMAGE_DIGEST"
 
+      - name: Promote retrieval latest
+        if: steps.latest.outputs.push_latest == 'true'
+        env:
+          IMAGE_DIGEST: ${{ steps.retrieval-build.outputs.digest }}
+        run: |
+          docker buildx imagetools create --prefer-index=false \
+            --tag "$IMAGE_NAME:latest-retrieval" "$IMAGE_NAME@$IMAGE_DIGEST"
+
       - name: Publish summary
         env:
           PUSH_LATEST: ${{ steps.latest.outputs.push_latest }}
@@ -146,5 +188,7 @@ jobs:
             echo "- Tag: \`$IMAGE_TAG\`"
             echo "- Commit: \`${{ steps.release.outputs.sha }}\`"
             echo "- Digest: \`${{ steps.build.outputs.digest }}\`"
+            echo "- Retrieval tag: \`$IMAGE_TAG-retrieval\`"
+            echo "- Retrieval digest: \`${{ steps.retrieval-build.outputs.digest }}\`"
             echo "- Latest: \`$PUSH_LATEST\`"
           } >> "$GITHUB_STEP_SUMMARY"
