@@ -16,14 +16,16 @@ from pydantic import ValidationError
 
 from mem0.configs.base import MemoryConfig, MemoryItem
 from mem0.configs.enums import MemoryType
+from mem0.configs.extraction import ExtractionPolicy
 from mem0.configs.prompts import (
     ADDITIVE_EXTRACTION_PROMPT,
     AGENT_CONTEXT_SUFFIX,
     PROCEDURAL_MEMORY_SYSTEM_PROMPT,
     generate_additive_extraction_prompt,
 )
-from mem0.exceptions import LLMError, VectorStoreError
+from mem0.exceptions import LLMError
 from mem0.exceptions import ValidationError as Mem0ValidationError
+from mem0.exceptions import VectorStoreError
 from mem0.memory.base import MemoryBase
 from mem0.memory.notices import (
     PERFORMANCE_SLOW_QUERY_THRESHOLD_SECONDS,
@@ -766,10 +768,11 @@ class Memory(MemoryBase):
         run_id: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
         timestamp: Optional[Any] = None,
-        expiration_date: Optional[Any] = None,
+        expiration_date: Optional[Any] = _UNSET,
         infer: bool = True,
         memory_type: Optional[str] = None,
         prompt: Optional[str] = None,
+        extraction_policy: Optional[ExtractionPolicy] = None,
     ):
         """
         Create a new memory.
@@ -817,7 +820,8 @@ class Memory(MemoryBase):
         if timestamp is not None:
             raise ValueError(get_temporal_feature_error_message("sync", "add", "timestamp"))
 
-        normalized_expiration_date = _normalize_expiration_date(expiration_date)
+        expiration_explicit = expiration_date is not _UNSET or "expiration_date" in (metadata or {})
+        normalized_expiration_date = _normalize_expiration_date(None if expiration_date is _UNSET else expiration_date)
         temporal_usage_notice = detect_temporal_usage_from_metadata(metadata)
         processed_metadata, effective_filters = _build_filters_and_metadata(
             user_id=user_id,
@@ -868,7 +872,10 @@ class Memory(MemoryBase):
         else:
             messages = parse_vision_messages(messages)
 
-        vector_store_result = self._add_to_vector_store(messages, processed_metadata, effective_filters, infer, prompt=prompt)
+        vector_store_result = self._add_to_vector_store(
+            messages, processed_metadata, effective_filters, infer, prompt=prompt,
+            extraction_policy=extraction_policy, expiration_explicit=expiration_explicit,
+        )
         scale_threshold_notice = detect_scale_threshold_from_add_result(self, vector_store_result)
         if temporal_usage_notice:
             display_temporal_usage_notice(self, "sync", "add", *temporal_usage_notice)
@@ -878,7 +885,9 @@ class Memory(MemoryBase):
             display_first_run_notice(self, "sync", "add")
         return {"results": vector_store_result}
 
-    def _add_to_vector_store(self, messages, metadata, filters, infer, prompt=None):
+    def _add_to_vector_store(
+        self, messages, metadata, filters, infer, prompt=None, extraction_policy=None, expiration_explicit=False
+    ):
         if not infer:
             returned_memories = []
             for message_dict in messages:
@@ -946,6 +955,11 @@ class Memory(MemoryBase):
             system_prompt += AGENT_CONTEXT_SUFFIX
 
         custom_instr = prompt or self.custom_instructions
+        if extraction_policy is not None:
+            system_prompt += (
+                "\nPer-call policy overrides conflicting extraction scope and output rules above:\n"
+                + extraction_policy.instructions()
+            )
 
         user_prompt = generate_additive_extraction_prompt(
             existing_memories=existing_memories,
@@ -1029,6 +1043,11 @@ class Memory(MemoryBase):
 
             memory_id = str(uuid.uuid4())
             mem_metadata = deepcopy(metadata)
+            if extraction_policy is not None:
+                mem_metadata = extraction_policy.classified_metadata(
+                    mem_metadata, mem.get("category"), expiration_explicit=expiration_explicit,
+                    now=datetime.now(timezone.utc),
+                )
             mem_metadata["data"] = text
             mem_metadata["text_lemmatized"] = text_lemmatized
             mem_metadata["hash"] = mem_hash
@@ -2466,11 +2485,12 @@ class AsyncMemory(MemoryBase):
         run_id: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
         timestamp: Optional[Any] = None,
-        expiration_date: Optional[Any] = None,
+        expiration_date: Optional[Any] = _UNSET,
         infer: bool = True,
         memory_type: Optional[str] = None,
         prompt: Optional[str] = None,
         llm=None,
+        extraction_policy: Optional[ExtractionPolicy] = None,
     ):
         """
         Create a new memory asynchronously.
@@ -2501,7 +2521,8 @@ class AsyncMemory(MemoryBase):
         if timestamp is not None:
             raise ValueError(await get_temporal_feature_error_message_async("async", "add", "timestamp"))
 
-        normalized_expiration_date = _normalize_expiration_date(expiration_date)
+        expiration_explicit = expiration_date is not _UNSET or "expiration_date" in (metadata or {})
+        normalized_expiration_date = _normalize_expiration_date(None if expiration_date is _UNSET else expiration_date)
         temporal_usage_notice = detect_temporal_usage_from_metadata(metadata)
         processed_metadata, effective_filters = _build_filters_and_metadata(
             user_id=user_id, agent_id=agent_id, run_id=run_id, input_metadata=metadata
@@ -2548,7 +2569,10 @@ class AsyncMemory(MemoryBase):
         else:
             messages = parse_vision_messages(messages)
 
-        vector_store_result = await self._add_to_vector_store(messages, processed_metadata, effective_filters, infer, prompt=prompt)
+        vector_store_result = await self._add_to_vector_store(
+            messages, processed_metadata, effective_filters, infer, prompt=prompt,
+            extraction_policy=extraction_policy, expiration_explicit=expiration_explicit,
+        )
         scale_threshold_notice = await asyncio.to_thread(detect_scale_threshold_from_add_result, self, vector_store_result)
         if temporal_usage_notice:
             await display_temporal_usage_notice_async(self, "async", "add", *temporal_usage_notice)
@@ -2565,6 +2589,8 @@ class AsyncMemory(MemoryBase):
         effective_filters: dict,
         infer: bool,
         prompt: Optional[str] = None,
+        extraction_policy: Optional[ExtractionPolicy] = None,
+        expiration_explicit: bool = False,
     ):
         if not infer:
             returned_memories = []
@@ -2634,6 +2660,11 @@ class AsyncMemory(MemoryBase):
             system_prompt += AGENT_CONTEXT_SUFFIX
 
         custom_instr = prompt or self.custom_instructions
+        if extraction_policy is not None:
+            system_prompt += (
+                "\nPer-call policy overrides conflicting extraction scope and output rules above:\n"
+                + extraction_policy.instructions()
+            )
 
         user_prompt = generate_additive_extraction_prompt(
             existing_memories=existing_memories,
@@ -2713,6 +2744,11 @@ class AsyncMemory(MemoryBase):
 
             memory_id = str(uuid.uuid4())
             mem_metadata = deepcopy(metadata)
+            if extraction_policy is not None:
+                mem_metadata = extraction_policy.classified_metadata(
+                    mem_metadata, mem.get("category"), expiration_explicit=expiration_explicit,
+                    now=datetime.now(timezone.utc),
+                )
             mem_metadata["data"] = text
             mem_metadata["text_lemmatized"] = text_lemmatized
             mem_metadata["hash"] = mem_hash

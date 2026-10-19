@@ -46,6 +46,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import func, select
 
+from mem0.configs.extraction import ExtractionPolicy
 from mem0.exceptions import ValidationError as Mem0ValidationError
 from mem0.memory.main import _validate_and_trim_entity_id, _vector_store_list_rows
 
@@ -196,6 +197,7 @@ class MemoryCreate(BaseModel):
     infer: Optional[bool] = Field(None, description="Whether to extract facts from messages. Defaults to True.")
     memory_type: Optional[str] = Field(None, description="Type of memory to store (e.g. 'core').")
     prompt: Optional[str] = Field(None, description="Custom prompt to use for fact extraction.")
+    extraction_policy: Optional[ExtractionPolicy] = None
 
 
 class MemoryUpdate(BaseModel):
@@ -382,6 +384,10 @@ def add_memory(memory_create: MemoryCreate, request: Request, _auth=Depends(veri
         raise HTTPException(status_code=400, detail="At least one identifier (user_id, agent_id, run_id) is required.")
 
     params = {k: v for k, v in memory_create.model_dump().items() if v is not None and k != "messages"}
+    if memory_create.extraction_policy is not None:
+        params["extraction_policy"] = memory_create.extraction_policy
+    if "expiration_date" in memory_create.model_fields_set:
+        params["expiration_date"] = memory_create.expiration_date
     receipt = None
     if mutation_receipts.MARKER in (memory_create.metadata or {}):
         reject_client_api_key(request, "Client API keys cannot use reserved mutation markers.")

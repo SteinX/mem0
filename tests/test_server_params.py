@@ -59,6 +59,27 @@ def mock_memory(_mock_memory):
 # SearchRequest: top_k parameter
 # ===========================================================================
 
+class TestExtractionPolicy:
+    def test_policy_is_forwarded_as_validated_model(self, client, mock_memory):
+        policy = {"version": 1, "categories": [{"name": "alpha", "description": "Preferences"}]}
+        response = client.post("/memories", json={
+            "messages": [{"role": "user", "content": "Chinese replies"}],
+            "user_id": "user-a", "extraction_policy": policy, "expiration_date": None,
+        })
+        assert response.status_code == 200
+        kwargs = mock_memory.add.call_args.kwargs
+        assert kwargs["extraction_policy"].model_dump(exclude_defaults=True) == policy
+        assert "expiration_date" in kwargs and kwargs["expiration_date"] is None
+
+    def test_bad_policy_is_rejected_before_add(self, client, mock_memory):
+        response = client.post("/memories", json={
+            "messages": [{"role": "user", "content": "Chinese replies"}],
+            "user_id": "user-a", "extraction_policy": {"version": True},
+        })
+        assert response.status_code == 422
+        mock_memory.add.assert_not_called()
+
+
 class TestSearchLimit:
     """Verify that the top_k parameter is accepted and forwarded to Memory.search()."""
 
