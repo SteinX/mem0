@@ -47,6 +47,16 @@ def test_unknown_model_category_is_rejected():
         POLICY.classified_metadata({}, "unknown", expiration_explicit=False, now=NOW)
 
 
+@pytest.mark.parametrize("type_value", ["document", "alpha"])
+def test_generic_metadata_type_keeps_inferred_category_and_ttl(type_value):
+    result = POLICY.classified_metadata(
+        {"type": type_value}, "beta", expiration_explicit=False, now=NOW
+    )
+    assert result["type"] == type_value
+    assert result.get("categories") == ["beta"]
+    assert result.get("expiration_date") == "2026-10-21"
+
+
 @pytest.mark.parametrize("ttl", [0, -1, True, "2", 3651])
 def test_invalid_ttl_is_rejected(ttl):
     with pytest.raises(ValidationError):
@@ -98,3 +108,22 @@ async def test_bad_classification_cannot_insert(memory):
         if isawaitable(result):
             await result
     memory.vector_store.insert.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_generic_type_classification_is_persisted(memory, mocker):
+    mocker.patch("mem0.memory.main.datetime").now.return_value = NOW
+    memory.llm.generate_response.return_value = (
+        '{"memory":[{"text":"Submit the QA report","category":"beta"}]}'
+    )
+    result = memory.add(
+        "Submit the QA report", user_id="user-a", metadata={"type": "document"},
+        extraction_policy=POLICY,
+    )
+    if isawaitable(result):
+        result = await result
+    assert len(result["results"]) == 1
+    payload = memory.vector_store.insert.call_args.kwargs["payloads"][0]
+    assert payload["type"] == "document"
+    assert payload.get("categories") == ["beta"]
+    assert payload.get("expiration_date") == "2026-10-21"

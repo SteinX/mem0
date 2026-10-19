@@ -60,9 +60,9 @@ class ExtractionPolicy(BaseModel):
     ) -> Dict[str, JsonValue]:
         result = dict(metadata)
         configured = {item.name: item for item in self.categories}
-        explicit = any(key in metadata for key in ("categories", "category", "custom_category", "type"))
+        explicit = any(key in metadata for key in ("categories", "category", "custom_category"))
         if explicit:
-            values = [metadata.get(key) for key in ("category", "custom_category", "type")]
+            values = [metadata.get(key) for key in ("category", "custom_category")]
             categories = metadata.get("categories")
             if isinstance(categories, list):
                 values.extend(categories)
