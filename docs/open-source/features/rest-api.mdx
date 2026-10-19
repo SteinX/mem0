@@ -279,8 +279,7 @@ image digest, bundling CPU PyTorch, Transformers, the pinned BGE reranker at
 `/opt/models/bge-reranker-base`, and the English NLP model. Use this variant
 when retaining a configuration that references that local model path.
 
-`rerank: true`
-uses the configured reranker; the REST server returns HTTP 503 when none is
+The REST server returns HTTP 503 for `rerank: true` when no reranker is
 configured. `latest_only: true` excludes candidates whose metadata contains a
 non-empty `superseded_by` marker before ranking and `top_k` selection. Omission
 or `false` preserves historical results. This option does not infer replacement

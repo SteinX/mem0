@@ -278,7 +278,8 @@ def test_retrieval_images_are_built_and_verified_before_promotion() -> None:
     assert '--tag "$IMAGE_NAME:latest-retrieval" "$IMAGE_NAME@$IMAGE_DIGEST"' in promotion
 
 
-def test_latest_promotion_uses_the_built_source(tmp_path: Path) -> None:
+@pytest.mark.parametrize(("step", "tag"), [("Promote latest", "latest"), ("Promote retrieval latest", "latest-retrieval")])
+def test_latest_promotion_uses_the_built_source(tmp_path: Path, step: str, tag: str) -> None:
     image = "ghcr.io/steinx/mem0"
     digest = "sha256:" + "a" * 64
     docker = tmp_path / "docker"
@@ -286,7 +287,7 @@ def test_latest_promotion_uses_the_built_source(tmp_path: Path) -> None:
     docker.chmod(0o755)
     calls = tmp_path / "docker-calls.txt"
     result = subprocess.run(
-        ["bash", "-e", "-o", "pipefail", "-c", workflow_script("Promote latest")],
+        ["bash", "-e", "-o", "pipefail", "-c", workflow_script(step)],
         env={
             **os.environ,
             "PATH": f"{tmp_path}:{os.environ['PATH']}",
@@ -300,5 +301,5 @@ def test_latest_promotion_uses_the_built_source(tmp_path: Path) -> None:
     )
     assert result.returncode == 0, result.stderr
     assert calls.read_text().splitlines() == [
-        f"buildx imagetools create --prefer-index=false --tag {image}:latest {image}@{digest}",
+        f"buildx imagetools create --prefer-index=false --tag {image}:{tag} {image}@{digest}",
     ]
