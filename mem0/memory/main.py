@@ -1420,6 +1420,7 @@ class Memory(MemoryBase):
         explain: bool = False,
         reference_date: Optional[Any] = None,
         show_expired: bool = False,
+        latest_only: bool = False,
         **kwargs,
     ):
         """
@@ -1453,6 +1454,7 @@ class Memory(MemoryBase):
             explain (bool, optional): Whether to include score_details for each result. Defaults to False.
             reference_date (Any, optional): Platform-only temporal parameter. Not supported in OSS.
             show_expired (bool, optional): Include expired memories. Defaults to False.
+            latest_only (bool, optional): Exclude explicitly superseded memories. Defaults to False.
 
         Returns:
             dict: A dictionary containing the search results under a "results" key.
@@ -1525,7 +1527,8 @@ class Memory(MemoryBase):
 
         search_start = time.perf_counter()
         original_memories = self._search_vector_store(
-            query, effective_filters, limit, threshold, explain=explain, show_expired=show_expired
+            query, effective_filters, limit, threshold, explain=explain, show_expired=show_expired,
+            latest_only=latest_only,
         )
         search_elapsed_seconds = time.perf_counter() - search_start
 
@@ -1658,7 +1661,7 @@ class Memory(MemoryBase):
                 return True
         return False
 
-    def _search_vector_store(self, query, filters, limit, threshold=0.1, explain=False, show_expired=False):
+    def _search_vector_store(self, query, filters, limit, threshold=0.1, explain=False, show_expired=False, latest_only=False):
         # Guard against None threshold (backward compat)
         if threshold is None:
             threshold = 0.1
@@ -1701,6 +1704,8 @@ class Memory(MemoryBase):
         for mem in semantic_results:
             payload = mem.payload if hasattr(mem, 'payload') else {}
             if not show_expired and _payload_is_expired(payload):
+                continue
+            if latest_only and payload.get("superseded_by"):
                 continue
             mem_id = str(mem.id)
             candidates.append({
@@ -3118,6 +3123,7 @@ class AsyncMemory(MemoryBase):
         explain: bool = False,
         reference_date: Optional[Any] = None,
         show_expired: bool = False,
+        latest_only: bool = False,
         **kwargs,
     ):
         """
@@ -3151,6 +3157,7 @@ class AsyncMemory(MemoryBase):
             explain (bool, optional): Whether to include score_details for each result. Defaults to False.
             reference_date (Any, optional): Platform-only temporal parameter. Not supported in OSS.
             show_expired (bool, optional): Include expired memories. Defaults to False.
+            latest_only (bool, optional): Exclude explicitly superseded memories. Defaults to False.
 
         Returns:
             dict: A dictionary containing the search results under a "results" key.
@@ -3227,7 +3234,8 @@ class AsyncMemory(MemoryBase):
 
         search_start = time.perf_counter()
         original_memories = await self._search_vector_store(
-            query, effective_filters, limit, threshold, explain=explain, show_expired=show_expired
+            query, effective_filters, limit, threshold, explain=explain, show_expired=show_expired,
+            latest_only=latest_only,
         )
         search_elapsed_seconds = time.perf_counter() - search_start
 
@@ -3363,7 +3371,7 @@ class AsyncMemory(MemoryBase):
                 return True
         return False
 
-    async def _search_vector_store(self, query, filters, limit, threshold=0.1, explain=False, show_expired=False):
+    async def _search_vector_store(self, query, filters, limit, threshold=0.1, explain=False, show_expired=False, latest_only=False):
         if threshold is None:
             threshold = 0.1
 
@@ -3405,6 +3413,8 @@ class AsyncMemory(MemoryBase):
         for mem in semantic_results:
             payload = mem.payload if hasattr(mem, 'payload') else {}
             if not show_expired and _payload_is_expired(payload):
+                continue
+            if latest_only and payload.get("superseded_by"):
                 continue
             mem_id = str(mem.id)
             candidates.append({

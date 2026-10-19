@@ -29,6 +29,7 @@ import transcript as transcript_mod  # noqa: E402
 
 @pytest.fixture
 def isolated_env(tmp_path, monkeypatch):
+    monkeypatch.setattr(memory_core, "_request_json_with_deadline", memory_core._request_json_with_network_retry)
     monkeypatch.setenv("MEM0_CODE_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("MEM0_CODE_USER_ID", "test-user")
     monkeypatch.delenv("MEM0_API_KEY", raising=False)
@@ -2559,9 +2560,9 @@ def test_explicit_search_formats_memories_and_empty_results():
         memories=[],
     )
 
-    assert memory_core.format_search_result(new_result) == (
-        "1. Parser tests live in tests/test_parser.py."
-    )
+    rendered = memory_core.format_search_result(new_result)
+    assert new_result.memories[0]["memory"] in rendered
+    assert "id=new-memory" in rendered
     assert memory_core.format_search_result(zero_result) == "No matching memories found."
     assert memory_core.format_search_result(empty_result) == "No matching memories found."
 
@@ -2589,7 +2590,7 @@ def test_search_output_uses_one_budget_without_per_memory_cutoff(
     assert "B" not in rendered
     assert len(rendered) <= 1000
     assert "category" not in rendered
-    assert "id" not in rendered
+    assert "id=one" in rendered
 
 
 def test_mcp_tool_contract_is_small_and_read_only():
@@ -2702,11 +2703,9 @@ def test_mcp_tool_is_session_independent_and_returns_plain_memories(
         "run_id": None,
         "operation": "mcp-search",
     }
-    assert rendered == (
-        "1. The parser entrypoint is src/parser.py. "
-        "[learnt on branch feat/parser]"
-    )
-    assert "memory-1" not in rendered
+    assert result.memories[0]["memory"] in rendered
+    assert result.memories[0]["metadata"]["branch"] in rendered
+    assert "id=memory-1" in rendered
     assert "0.91" not in rendered
     assert "project_knowledge" not in rendered
 

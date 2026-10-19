@@ -3,7 +3,7 @@ title: Codex
 description: "Add persistent memory to OpenAI Codex with automatic capture, automatic recall, a search tool, and six memory skills."
 ---
 
-Add persistent memory to [**OpenAI Codex**](https://openai.com/codex/) with the Mem0 plugin. Codex forgets everything between tasks. This plugin fixes that by connecting to Mem0's cloud memory layer via MCP, automatically capturing learnings at key lifecycle points, and retrieving relevant context on the first prompt of a session. Codex can use the search tool for recall later in the session.
+Add persistent memory to [**OpenAI Codex**](https://openai.com/codex/) with the Mem0 plugin. Codex forgets everything between tasks. This plugin fixes that by connecting to Mem0's cloud memory layer via MCP, automatically capturing learnings at key lifecycle points, and retrieving relevant context on the first eligible prompt of a session. Codex can use the search tool for recall later in the session.
 
 <Info>Current plugin version: `0.3.1`.</Info>
 
@@ -142,13 +142,25 @@ Option A registers the hooks with the plugin. No separate hook installer or glob
 | Hook | Event | What it does |
 |------|-------|-------------|
 | **Session start** | `SessionStart` | Initializes the project session and recovers pending capture |
-| **User prompt** | `UserPromptSubmit` | Records each prompt; searches on the first prompt when it has at least 20 characters |
+| **User prompt** | `UserPromptSubmit` | Records each prompt; searches on the first prompt with at least 20 characters, with one later retry after failure |
 | **Post-tool** | `PostToolUse` | Records useful tool outcomes for the completed exchange |
 | **Subagent start** | `SubagentStart` | Reuses the parent turn's retrieved memory context in the child |
 | **Subagent stop** | `SubagentStop` | Records the child transcript path and completed result |
 | **Stop** | `Stop` | Captures completed work and starts a background flush when needed |
 | **Pre-compact** | `PreCompact` | Flushes pending capture before context compaction |
 | **Session end** | `SessionEnd` | Flushes any remaining capture in the background |
+
+Short prompts do not consume automatic recall. A successful search, including an
+empty result, completes recall for that repository/session; a failed request can
+retry on one later eligible prompt. The complete HTTP request runs in a child
+process with a two-second deadline, including connection setup, response reads,
+and retries, leaving time for the three-second hook to emit its JSON response.
+
+Injected memories include their IDs, storage timestamps, and an explicit
+current/history/unknown classification. Storage timestamps do not establish
+when a fact was valid, and similarity order does not establish factual priority.
+Internal suggestion tasks cannot be reliably excluded without a corresponding
+host-provided marker; the plugin does not classify user prompts by their wording.
 
 What you type is stored as yours. Codex's captured responses are stored as the assistant's, so its suggestions never become your stated preferences.
 
