@@ -74,7 +74,7 @@ def seed(client: httpx.Client, url: str, corpus: Corpus) -> None:
     ]
     random.Random(20261020).shuffle(fixtures)
     for number, (fixture_id, text) in enumerate(fixtures, 1):
-        response = client.post(f"{url}/memories", json={
+        response = client.post(f"{url.rstrip('/')}/memories", json={
             **SCOPE, "infer": False, "messages": [{"role": "user", "content": text}],
             "metadata": {"fixture_id": fixture_id},
         }).raise_for_status()

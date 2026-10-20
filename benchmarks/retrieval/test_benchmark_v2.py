@@ -8,6 +8,29 @@ import pytest
 import run_benchmark_v2
 
 
+@pytest.mark.parametrize("url", ["http://fixture", "http://fixture/", "http://fixture///"])
+def test_seed_accepts_base_url_trailing_slashes(url: str) -> None:
+    corpus = run_benchmark_v2.Corpus.model_validate({
+        "cases": [{"id": "q", "category": "path", "query": "config/app.yaml", "split": "dev",
+                   "origin": "fixture", "documents": ["answer", "other1", "other2", "other3"]}],
+        "negative_queries": [],
+    })
+    posted = []
+
+    def wire(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/memories":
+            posted.append(json.loads(request.content))
+            return httpx.Response(200, json={"results": [{"id": str(len(posted))}]})
+        if request.url.path == "/v1/memories/scan":
+            return httpx.Response(200, json={"total": len(posted)})
+        return httpx.Response(404)
+
+    with httpx.Client(transport=httpx.MockTransport(wire)) as client:
+        run_benchmark_v2.seed(client, url, corpus)
+    assert {row["metadata"]["fixture_id"] for row in posted} == {f"q-{i}" for i in range(4)}
+    assert all(row["infer"] is False for row in posted)
+
+
 def test_empty_negatives_and_warmups_are_scored_separately(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     (tmp_path / "key.env").write_text("P0_API_KEY=fixture-key\n")
     (tmp_path / "corpus.json").write_text(json.dumps({
