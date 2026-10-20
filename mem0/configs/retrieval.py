@@ -46,7 +46,10 @@ def _path_matches(query_path: str, stored_path: str) -> bool:
     if not absolute and stored_path.endswith("/" + query_path):
         return True
     basename = query_path.rsplit("/", 1)[-1]
-    return "." not in basename and stored_path.startswith(query_path.rstrip("/") + "/")
+    prefix = query_path.rstrip("/") + "/"
+    return "." not in basename and (
+        stored_path.startswith(prefix) or (not absolute and "/" + prefix in stored_path)
+    )
 
 
 class RetrievalPolicy(BaseModel):

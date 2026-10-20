@@ -67,6 +67,7 @@ def build_memory(monkeypatch, tmp_path):
 @pytest.mark.parametrize(("query", "texts"), [
     ("读取 /srv/nebula/config.yaml", ["/srv/nebula/config.yml 配置", "/srv/nebula/config.yaml 配置"]),
     ("读取 deploy/.env", ["/workspace/demo/.env 配置", "/workspace/demo/deploy/.env 配置"]),
+    ("读取 deploy/config", ["/workspace/redeploy/config/app.yaml 配置", "/workspace/deploy/config/app.yaml 配置"]),
     ("版本 v1.2.3 的变更", ["版本v1.2.30增加缓存", "版本1.2.3增加缓存"]),
     ("版本 3.0.0-rc.2 的变更", ["版本3.0.0-rc.20增加缓存", "版本3.0.0-rc.2增加缓存"]),
 ])
