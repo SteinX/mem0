@@ -4,6 +4,7 @@ from typing import Any, Dict, Optional
 from pydantic import BaseModel, Field
 
 from mem0.configs.rerankers.config import RerankerConfig
+from mem0.configs.retrieval import RetrievalPolicy
 from mem0.embeddings.configs import EmbedderConfig
 from mem0.llms.configs import LlmConfig
 from mem0.vector_stores.configs import VectorStoreConfig
@@ -27,6 +28,7 @@ class MemoryItem(BaseModel):
 
 
 class MemoryConfig(BaseModel):
+    retrieval: RetrievalPolicy = Field(default_factory=RetrievalPolicy)
     vector_store: VectorStoreConfig = Field(
         description="Configuration for the vector store",
         default_factory=VectorStoreConfig,
