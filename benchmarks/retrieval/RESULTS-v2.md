@@ -125,7 +125,7 @@ rerank_min_score=0.05，然后固定参数才评估留出集，没有根据留�
 三个新控制默认均禁用，不需要新的依赖或 REST/MCP 请求参数。
 
 14 项新回归在旧实现上失败、2 项原行为用例通过；最终 54 项策略及同步/异步
-专项检查通过，评测/分析工具的 14 项检查通过。Review 回归另复现了目录匹配、
+专项检查通过，评测/分析工具的 15 项检查通过。Review 回归另复现了目录匹配、
 URL 尾斜杠和分析输入问题，均经红绿验证；相对目录及两项边界另通过真实 MCP
 链路检查，未计入冻结质量样本。Ruff/isort hooks、文档索引覆盖、
 diff 空白检查通过。实际 BGE 推理与字段穿透由本次真实链路评测验证。
@@ -139,6 +139,9 @@ fallback 测试因精简 QA 镜像缺少 AutoTokenizer/CrossEncoder 可选依赖
 
 运行源码的精确内容哈希、冻结参数、分组/分轮指标见
 [results-v2.json](results-v2.json)。合入代码不会自动开启配置或部署生产。
+工具哈希另按实际测量修订记录；随后仅修复了播种 URL 规范化去重，未改变计时
+查询循环或 Core 策略。该修复通过混合尾斜杠、自定义组名、仅开发集的真实 CLI
+回归：四条记忆只播种一次，六个 MCP 请求及分析均成功，未计入冻结质量样本。
 
 - 冻结语料和工具：benchmarks/retrieval/corpus-v2.json、run_benchmark_v2.py、
   analyze_benchmark_v2.py、README-v2.md。

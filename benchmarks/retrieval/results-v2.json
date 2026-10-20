@@ -6,10 +6,15 @@
     "mem0/configs/base.py": "4569bffba478ac5559a07716c14f0b0edec608c74f27eb8a59d4e964ae0da5c1",
     "mem0/memory/main.py": "c4f33490ee1288565608c6f05b197eaf725dab0ce15f7a85f1e32fe3627347db"
   },
-  "tool_files_sha256": {
+  "measured_tool_files_sha256": {
     "benchmarks/retrieval/run_benchmark_v2.py": "0f4e24c8749cb2229c73da738970090ade394e073c3e583deefade0930907fc3",
     "benchmarks/retrieval/analyze_benchmark_v2.py": "7ffc04d8dc4f9f6393837b709784252bafa1d8a86414fb58c3c9496d4b46882b"
   },
+  "measured_tool_commits": {
+    "benchmarks/retrieval/run_benchmark_v2.py": "4a2dfc19cfa5475b2c9cdca3031fe92e699c9373",
+    "benchmarks/retrieval/analyze_benchmark_v2.py": "24ce3767ecee7c054ae773751bf36672ee53f7ed"
+  },
+  "tool_hash_scope": "Tool hashes identify the executed measurement revisions. The subsequent runner-only fix deduplicates normalized seed URLs; it does not change the timed query loop or measured Core policy. A separate real MCP seed regression covers mixed trailing slashes.",
   "selection_before_heldout": {
     "corpus_sha256": "284d4c1ef7e0c4feb9c839816b11de57b4d917dba8c2c3abe8dd93dc279aacd8",
     "selection_split": "dev",

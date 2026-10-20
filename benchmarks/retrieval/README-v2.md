@@ -30,8 +30,9 @@ restricted key file. Example:
       --corpus benchmarks/retrieval/corpus-v2.json --output RESULTS \
       --split dev --repetitions 1 --seed
 
-Seed requires empty benchmark scopes. Do not use production URLs. The first query
-per group is warmup and remains in raw.jsonl but is excluded from metrics. Group
+Seed requires empty benchmark scopes. Do not use production URLs.
+Sidecar base URLs are normalized before deduplication and seeding.
+The first query per group is warmup and remains in raw.jsonl but is excluded from metrics. Group
 order rotates per query/repetition. HTTP/tool errors, unknown labels and missing
 or all-zero rerank scores stop evaluation. Empty results are valid, including
 intentional score-gated negatives.

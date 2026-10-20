@@ -114,7 +114,7 @@ def main() -> None:
         (opts.output / "raw.jsonl").open("x") as raw,
     ):
         if opts.seed:
-            urls = sorted({group.sidecar_url for group in groups})
+            urls = sorted({group.sidecar_url.rstrip("/") for group in groups})
             with httpx.Client(headers={"X-API-Key": key}, timeout=180, trust_env=False) as writer:
                 if any(count_scope(writer, url) for url in urls):
                     raise BenchmarkError("Seed refused: an isolated scope is already populated")

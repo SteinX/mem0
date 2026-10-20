@@ -31,7 +31,10 @@ def test_seed_accepts_base_url_trailing_slashes(url: str) -> None:
     assert all(row["infer"] is False for row in posted)
 
 
-def test_empty_negatives_and_warmups_are_scored_separately(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("seed", [False, True])
+def test_empty_negatives_and_warmups_are_scored_separately(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, seed: bool,
+) -> None:
     (tmp_path / "key.env").write_text("P0_API_KEY=fixture-key\n")
     (tmp_path / "corpus.json").write_text(json.dumps({
         "cases": [{"id": "q", "category": "path", "query": "/srv/config.yaml", "split": "test",
@@ -39,11 +42,19 @@ def test_empty_negatives_and_warmups_are_scored_separately(tmp_path: Path, monke
         "negative_queries": [{"id": "negative", "category": "negative", "query": "birthday", "split": "test"}],
     }))
     (tmp_path / "groups.json").write_text(json.dumps([
-        {"name": name, "mcp_url": "http://fixture/mcp", "sidecar_url": "http://fixture", "rerank": rerank}
+        {"name": name, "mcp_url": "http://fixture/mcp",
+         "sidecar_url": "http://fixture/" if rerank else "http://fixture", "rerank": rerank}
         for name, rerank in (("plain", False), ("rerank", True))
     ]))
 
+    seeded = []
+
     def wire(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/memories":
+            seeded.append(json.loads(request.content))
+            return httpx.Response(200, json={"results": [{"id": str(len(seeded))}]})
+        if request.url.path == "/v1/memories/scan":
+            return httpx.Response(200, json={"total": len(seeded)})
         assert request.headers["authorization"] == "Bearer fixture-key"
         arguments = json.loads(request.content)["params"]["arguments"]
         hits = [] if arguments["query"] == "birthday" else [{
@@ -57,6 +68,7 @@ def test_empty_negatives_and_warmups_are_scored_separately(tmp_path: Path, monke
         "run_benchmark_v2.py", "--groups-file", str(tmp_path / "groups.json"),
         "--key-file", str(tmp_path / "key.env"), "--corpus", str(tmp_path / "corpus.json"),
         "--output", str(tmp_path / "out"), "--split", "test",
+        *(["--seed"] if seed else []),
     ])
     run_benchmark_v2.main()
     summary = json.loads((tmp_path / "out/summary.json").read_text())
@@ -68,6 +80,7 @@ def test_empty_negatives_and_warmups_are_scored_separately(tmp_path: Path, monke
     raw = (tmp_path / "out/raw.jsonl").read_text()
     assert len(raw.splitlines()) == 6
     assert "fixture-key" not in raw
+    assert len(seeded) == (4 if seed else 0)
 
 
 @pytest.mark.parametrize(("custom_groups", "dev_only"), [(False, False), (True, False), (True, True)])
