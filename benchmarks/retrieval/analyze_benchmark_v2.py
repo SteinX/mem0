@@ -111,7 +111,7 @@ def main() -> None:
                 row for row in observations
                 if row.record.group == group and (split == "all" or row.record.split == split)
             ]) for group in groups
-        } for split in ("dev", "test", "all")
+        } for split in (*sorted({row.record.split for row in observations}), "all")
     }
     repeated = defaultdict(list)
     for row in observations:
@@ -136,6 +136,8 @@ def main() -> None:
     by_request = {(row.record.group, row.record.case_id, row.record.round): row for row in observations}
     for left, right in (("baseline", "baseline_rerank"), ("candidate", "candidate_rerank"),
                         ("baseline_rerank", "candidate_rerank")):
+        if left not in groups or right not in groups:
+            continue
         deltas = []
         for (group, case, repetition), row in by_request.items():
             if group == left:
@@ -157,7 +159,7 @@ def main() -> None:
     (root / "analysis.json").write_text(json.dumps(analysis, ensure_ascii=False, indent=2) + "\n")
     (root / "failure-cases.json").write_text(json.dumps(failures, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps({"requests": len(observations), "changed_answer_ranks": len(changed_ranks),
-                      "test": split_results["test"]}, ensure_ascii=False))
+                      "test": split_results.get("test", {})}, ensure_ascii=False))
 
 
 if __name__ == "__main__":

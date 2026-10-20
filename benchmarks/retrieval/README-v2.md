@@ -36,6 +36,10 @@ order rotates per query/repetition. HTTP/tool errors, unknown labels and missing
 or all-zero rerank scores stop evaluation. Empty results are valid, including
 intentional score-gated negatives.
 
+Analyze a completed directory with analyze_benchmark_v2.py RESULTS CORPUS.
+It reports observed splits; paired latency deltas require both named comparison
+groups to be present. Custom group names still receive quality and latency metrics.
+
 Report positive Recall@1/3/5 and MRR separately from negative nonempty rate and
 answerable-query empty rate. Repetitions add latency samples, not independent
 quality examples. End-to-end timings include embedding, database, auth, Sidecar
