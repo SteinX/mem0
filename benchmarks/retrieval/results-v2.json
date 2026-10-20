@@ -1,0 +1,1653 @@
+{
+  "baseline_commit": "36e0b2cfe12c934ccab4f7dd4277e338e1d99e5c",
+  "measured_runtime_commit": "e416f9e7fcc9b3212c5ed44a865ba5e3c12162a6",
+  "runtime_files_sha256": {
+    "mem0/configs/retrieval.py": "cd9818499fb0675e65a0c47e13b73aa190e1c546ac7903dce959a67628a689eb",
+    "mem0/configs/base.py": "4569bffba478ac5559a07716c14f0b0edec608c74f27eb8a59d4e964ae0da5c1",
+    "mem0/memory/main.py": "c4f33490ee1288565608c6f05b197eaf725dab0ce15f7a85f1e32fe3627347db"
+  },
+  "measured_tool_files_sha256": {
+    "benchmarks/retrieval/run_benchmark_v2.py": "48e855746d26ba317d19badd6e1b16611470a809a0518b00930b92609fa0fecc",
+    "benchmarks/retrieval/analyze_benchmark_v2.py": "7ffc04d8dc4f9f6393837b709784252bafa1d8a86414fb58c3c9496d4b46882b"
+  },
+  "measured_tool_commits": {
+    "benchmarks/retrieval/run_benchmark_v2.py": "e416f9e7fcc9b3212c5ed44a865ba5e3c12162a6",
+    "benchmarks/retrieval/analyze_benchmark_v2.py": "e416f9e7fcc9b3212c5ed44a865ba5e3c12162a6"
+  },
+  "tool_hash_scope": "Runtime and tool hashes identify the frozen final comparison and match the final PR files. Additional review regression cases are excluded from the frozen quality sample.",
+  "selection_before_heldout": {
+    "corpus_sha256": "284d4c1ef7e0c4feb9c839816b11de57b4d917dba8c2c3abe8dd93dc279aacd8",
+    "selection_split": "dev",
+    "test_queries_evaluated": false,
+    "configuration": {
+      "exact_identifiers": true,
+      "rerank_candidate_limit": 20,
+      "rerank_min_score": 0.05
+    },
+    "rule": "Choose the lowest tested threshold eliminating observed dev negative hits while retaining candidate Recall@5; freeze before held-out evaluation.",
+    "development_pool20": {
+      "groups": {
+        "candidate": {
+          "recall1": 0.921875,
+          "recall5": 1,
+          "p95": 157.16233979692333,
+          "negative": 0.5,
+          "categories": {
+            "chinese": 0.9375,
+            "version": 0.9375,
+            "path": 0.9375,
+            "error_code": 0.875
+          }
+        },
+        "candidate_rerank": {
+          "recall1": 0.921875,
+          "recall5": 1,
+          "p95": 611.2116214979324,
+          "negative": 0.5,
+          "categories": {
+            "chinese": 0.875,
+            "version": 0.9375,
+            "path": 0.875,
+            "error_code": 1
+          }
+        }
+      }
+    },
+    "threshold_sweep": [
+      {
+        "threshold": 0,
+        "recall1": 0.921875,
+        "recall5": 1,
+        "positive_empty": 0,
+        "negative_nonempty": 0.5
+      },
+      {
+        "threshold": 0.01,
+        "recall1": 0.921875,
+        "recall5": 1,
+        "positive_empty": 0,
+        "negative_nonempty": 0.0625
+      },
+      {
+        "threshold": 0.05,
+        "recall1": 0.921875,
+        "recall5": 1,
+        "positive_empty": 0,
+        "negative_nonempty": 0
+      },
+      {
+        "threshold": 0.1,
+        "recall1": 0.921875,
+        "recall5": 1,
+        "positive_empty": 0,
+        "negative_nonempty": 0
+      },
+      {
+        "threshold": 0.2,
+        "recall1": 0.921875,
+        "recall5": 1,
+        "positive_empty": 0,
+        "negative_nonempty": 0
+      },
+      {
+        "threshold": 0.25,
+        "recall1": 0.921875,
+        "recall5": 1,
+        "positive_empty": 0,
+        "negative_nonempty": 0
+      },
+      {
+        "threshold": 0.3,
+        "recall1": 0.90625,
+        "recall5": 0.984375,
+        "positive_empty": 0.015625,
+        "negative_nonempty": 0
+      },
+      {
+        "threshold": 0.4,
+        "recall1": 0.90625,
+        "recall5": 0.984375,
+        "positive_empty": 0.015625,
+        "negative_nonempty": 0
+      },
+      {
+        "threshold": 0.5,
+        "recall1": 0.90625,
+        "recall5": 0.984375,
+        "positive_empty": 0.015625,
+        "negative_nonempty": 0
+      },
+      {
+        "threshold": 0.75,
+        "recall1": 0.90625,
+        "recall5": 0.984375,
+        "positive_empty": 0.015625,
+        "negative_nonempty": 0
+      },
+      {
+        "threshold": 0.9,
+        "recall1": 0.875,
+        "recall5": 0.9375,
+        "positive_empty": 0.046875,
+        "negative_nonempty": 0
+      }
+    ],
+    "limits": "Subject-held-out synthetic fixtures share templates; no real production-memory quality claim."
+  },
+  "analysis": {
+    "corpus_sha256": "284d4c1ef7e0c4feb9c839816b11de57b4d917dba8c2c3abe8dd93dc279aacd8",
+    "measured_requests": 1280,
+    "warmups_excluded": [
+      {
+        "group": "candidate_rerank",
+        "latency_ms": 1116.5621349937283
+      },
+      {
+        "group": "baseline",
+        "latency_ms": 81.53032099653501
+      },
+      {
+        "group": "baseline_rerank",
+        "latency_ms": 1605.477097997209
+      },
+      {
+        "group": "candidate",
+        "latency_ms": 67.69505099509843
+      }
+    ],
+    "splits": {
+      "dev": {
+        "baseline": {
+          "positive": {
+            "requests": 128,
+            "recall@1": 0.90625,
+            "recall@3": 1,
+            "recall@5": 1,
+            "mrr": 0.953125,
+            "latency_ms": {
+              "p50": 93.19551449880237,
+              "p95": 138.2814324984792,
+              "mean": 96.07338912553587
+            }
+          },
+          "answerable_empty_rate": 0,
+          "negative_nonempty_rate": 1,
+          "independent_positive_queries": 64,
+          "independent_negative_queries": 16,
+          "categories": {
+            "chinese": {
+              "requests": 32,
+              "recall@1": 0.9375,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.96875,
+              "latency_ms": {
+                "p50": 92.9369135046727,
+                "p95": 127.41164420658606,
+                "mean": 90.43773165740276
+              }
+            },
+            "error_code": {
+              "requests": 32,
+              "recall@1": 0.875,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.9375,
+              "latency_ms": {
+                "p50": 87.59669450228103,
+                "p95": 135.96965536053173,
+                "mean": 93.60837415852075
+              }
+            },
+            "path": {
+              "requests": 32,
+              "recall@1": 0.9375,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.96875,
+              "latency_ms": {
+                "p50": 100.15261550142895,
+                "p95": 153.01885165463318,
+                "mean": 106.19976981161017
+              }
+            },
+            "version": {
+              "requests": 32,
+              "recall@1": 0.875,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.9375,
+              "latency_ms": {
+                "p50": 92.77065749483882,
+                "p95": 129.571706646675,
+                "mean": 94.0476808746098
+              }
+            }
+          },
+          "all_latency_ms": {
+            "p50": 95.15573648968711,
+            "p95": 142.89555815412308,
+            "mean": 98.42681075051587
+          }
+        },
+        "baseline_rerank": {
+          "positive": {
+            "requests": 128,
+            "recall@1": 0.84375,
+            "recall@3": 0.984375,
+            "recall@5": 1,
+            "mrr": 0.91796875,
+            "latency_ms": {
+              "p50": 1364.6193035092438,
+              "p95": 1793.7270257454657,
+              "mean": 1412.429968570791
+            }
+          },
+          "answerable_empty_rate": 0,
+          "negative_nonempty_rate": 1,
+          "independent_positive_queries": 64,
+          "independent_negative_queries": 16,
+          "categories": {
+            "chinese": {
+              "requests": 32,
+              "recall@1": 0.875,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.9375,
+              "latency_ms": {
+                "p50": 1258.0338974948972,
+                "p95": 1332.5545784486167,
+                "mean": 1258.7062251559473
+              }
+            },
+            "error_code": {
+              "requests": 32,
+              "recall@1": 1,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 1,
+              "latency_ms": {
+                "p50": 1423.5281054934603,
+                "p95": 1604.2722081023385,
+                "mean": 1451.008908656604
+              }
+            },
+            "path": {
+              "requests": 32,
+              "recall@1": 0.5625,
+              "recall@3": 0.9375,
+              "recall@5": 1,
+              "mrr": 0.765625,
+              "latency_ms": {
+                "p50": 1684.5095370008494,
+                "p95": 1889.1346269469068,
+                "mean": 1635.386679718522
+              }
+            },
+            "version": {
+              "requests": 32,
+              "recall@1": 0.9375,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.96875,
+              "latency_ms": {
+                "p50": 1302.318836998893,
+                "p95": 1410.3708255497622,
+                "mean": 1304.618060752091
+              }
+            }
+          },
+          "all_latency_ms": {
+            "p50": 1349.1435694959364,
+            "p95": 1823.0017170426436,
+            "mean": 1418.8030569687726
+          }
+        },
+        "candidate": {
+          "positive": {
+            "requests": 128,
+            "recall@1": 0.921875,
+            "recall@3": 1,
+            "recall@5": 1,
+            "mrr": 0.9609375,
+            "latency_ms": {
+              "p50": 92.11090050666826,
+              "p95": 139.51170154978172,
+              "mean": 97.02972311674785
+            }
+          },
+          "answerable_empty_rate": 0,
+          "negative_nonempty_rate": 0.5,
+          "independent_positive_queries": 64,
+          "independent_negative_queries": 16,
+          "categories": {
+            "chinese": {
+              "requests": 32,
+              "recall@1": 0.9375,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.96875,
+              "latency_ms": {
+                "p50": 95.16535900183953,
+                "p95": 135.8468245518452,
+                "mean": 97.61619681194134
+              }
+            },
+            "error_code": {
+              "requests": 32,
+              "recall@1": 0.875,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.9375,
+              "latency_ms": {
+                "p50": 95.41312399960589,
+                "p95": 141.11518879290088,
+                "mean": 97.72723918604242
+              }
+            },
+            "path": {
+              "requests": 32,
+              "recall@1": 0.9375,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.96875,
+              "latency_ms": {
+                "p50": 85.44411799812224,
+                "p95": 142.07746594547643,
+                "mean": 95.71643512435912
+              }
+            },
+            "version": {
+              "requests": 32,
+              "recall@1": 0.9375,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.96875,
+              "latency_ms": {
+                "p50": 91.82144349324517,
+                "p95": 137.20408040026086,
+                "mean": 97.0590213446485
+              }
+            }
+          },
+          "all_latency_ms": {
+            "p50": 91.14141099416884,
+            "p95": 142.6326005486771,
+            "mean": 95.44294976240053
+          }
+        },
+        "candidate_rerank": {
+          "positive": {
+            "requests": 128,
+            "recall@1": 0.921875,
+            "recall@3": 1,
+            "recall@5": 1,
+            "mrr": 0.9609375,
+            "latency_ms": {
+              "p50": 508.49650600139285,
+              "p95": 611.8809336541744,
+              "mean": 441.09992951644017
+            }
+          },
+          "answerable_empty_rate": 0,
+          "negative_nonempty_rate": 0,
+          "independent_positive_queries": 64,
+          "independent_negative_queries": 16,
+          "categories": {
+            "chinese": {
+              "requests": 32,
+              "recall@1": 0.875,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.9375,
+              "latency_ms": {
+                "p50": 512.3687704981421,
+                "p95": 554.4417622033507,
+                "mean": 510.3103426254165
+              }
+            },
+            "error_code": {
+              "requests": 32,
+              "recall@1": 1,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 1,
+              "latency_ms": {
+                "p50": 566.2571100037894,
+                "p95": 623.1305042485474,
+                "mean": 568.5746774684048
+              }
+            },
+            "path": {
+              "requests": 32,
+              "recall@1": 0.875,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.9375,
+              "latency_ms": {
+                "p50": 236.54966499452712,
+                "p95": 617.7626358519774,
+                "mean": 348.1506906255163
+              }
+            },
+            "version": {
+              "requests": 32,
+              "recall@1": 0.9375,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.96875,
+              "latency_ms": {
+                "p50": 320.3618575062137,
+                "p95": 550.8708170091268,
+                "mean": 337.364007346423
+              }
+            }
+          },
+          "all_latency_ms": {
+            "p50": 500.6636414982495,
+            "p95": 609.5809732985799,
+            "mean": 415.60838550103654
+          }
+        }
+      },
+      "test": {
+        "baseline": {
+          "positive": {
+            "requests": 128,
+            "recall@1": 0.96875,
+            "recall@3": 1,
+            "recall@5": 1,
+            "mrr": 0.984375,
+            "latency_ms": {
+              "p50": 96.74142100266181,
+              "p95": 153.1852548039751,
+              "mean": 99.83516608633636
+            }
+          },
+          "answerable_empty_rate": 0,
+          "negative_nonempty_rate": 1,
+          "independent_positive_queries": 64,
+          "independent_negative_queries": 16,
+          "categories": {
+            "chinese": {
+              "requests": 32,
+              "recall@1": 1,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 1,
+              "latency_ms": {
+                "p50": 76.47248799912632,
+                "p95": 128.72112090190058,
+                "mean": 88.206210813496
+              }
+            },
+            "error_code": {
+              "requests": 32,
+              "recall@1": 1,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 1,
+              "latency_ms": {
+                "p50": 99.82689900061814,
+                "p95": 159.24300684637274,
+                "mean": 106.68461556360853
+              }
+            },
+            "path": {
+              "requests": 32,
+              "recall@1": 1,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 1,
+              "latency_ms": {
+                "p50": 104.98912699404173,
+                "p95": 145.8196340012364,
+                "mean": 106.21326093678363
+              }
+            },
+            "version": {
+              "requests": 32,
+              "recall@1": 0.875,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.9375,
+              "latency_ms": {
+                "p50": 96.529720001854,
+                "p95": 135.82705534572597,
+                "mean": 98.23657703145727
+              }
+            }
+          },
+          "all_latency_ms": {
+            "p50": 97.27065200422658,
+            "p95": 152.92778760485817,
+            "mean": 100.5150991309165
+          }
+        },
+        "baseline_rerank": {
+          "positive": {
+            "requests": 128,
+            "recall@1": 0.875,
+            "recall@3": 1,
+            "recall@5": 1,
+            "mrr": 0.9375,
+            "latency_ms": {
+              "p50": 1412.3154310000245,
+              "p95": 1817.4096639515483,
+              "mean": 1457.723922179298
+            }
+          },
+          "answerable_empty_rate": 0,
+          "negative_nonempty_rate": 1,
+          "independent_positive_queries": 64,
+          "independent_negative_queries": 16,
+          "categories": {
+            "chinese": {
+              "requests": 32,
+              "recall@1": 1,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 1,
+              "latency_ms": {
+                "p50": 1302.5609010001062,
+                "p95": 1411.8485362931096,
+                "mean": 1307.9030644689738
+              }
+            },
+            "error_code": {
+              "requests": 32,
+              "recall@1": 1,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 1,
+              "latency_ms": {
+                "p50": 1463.5312444952433,
+                "p95": 1612.1333446986682,
+                "mean": 1476.1395004052247
+              }
+            },
+            "path": {
+              "requests": 32,
+              "recall@1": 0.5625,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.78125,
+              "latency_ms": {
+                "p50": 1742.0253935051733,
+                "p95": 1934.730269400461,
+                "mean": 1735.9161548743032
+              }
+            },
+            "version": {
+              "requests": 32,
+              "recall@1": 0.9375,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.96875,
+              "latency_ms": {
+                "p50": 1306.5213759982726,
+                "p95": 1431.6012690025673,
+                "mean": 1310.93696896869
+              }
+            }
+          },
+          "all_latency_ms": {
+            "p50": 1382.6528029967449,
+            "p95": 1847.048178159457,
+            "mean": 1452.1680424059014
+          }
+        },
+        "candidate": {
+          "positive": {
+            "requests": 128,
+            "recall@1": 0.96875,
+            "recall@3": 1,
+            "recall@5": 1,
+            "mrr": 0.984375,
+            "latency_ms": {
+              "p50": 89.08969400363276,
+              "p95": 132.1832548950624,
+              "mean": 91.6535885543226
+            }
+          },
+          "answerable_empty_rate": 0,
+          "negative_nonempty_rate": 0.5,
+          "independent_positive_queries": 64,
+          "independent_negative_queries": 16,
+          "categories": {
+            "chinese": {
+              "requests": 32,
+              "recall@1": 1,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 1,
+              "latency_ms": {
+                "p50": 86.13401649927255,
+                "p95": 128.3435634468333,
+                "mean": 90.35576774886067
+              }
+            },
+            "error_code": {
+              "requests": 32,
+              "recall@1": 1,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 1,
+              "latency_ms": {
+                "p50": 87.83910499914782,
+                "p95": 122.52008664945606,
+                "mean": 92.32553681204081
+              }
+            },
+            "path": {
+              "requests": 32,
+              "recall@1": 1,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 1,
+              "latency_ms": {
+                "p50": 93.32075950078433,
+                "p95": 136.8888054494164,
+                "mean": 96.09377465540092
+              }
+            },
+            "version": {
+              "requests": 32,
+              "recall@1": 0.875,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.9375,
+              "latency_ms": {
+                "p50": 88.08680250513135,
+                "p95": 124.45286099900841,
+                "mean": 87.83927500098798
+              }
+            }
+          },
+          "all_latency_ms": {
+            "p50": 86.21821050473955,
+            "p95": 133.8962964437087,
+            "mean": 90.66463808121625
+          }
+        },
+        "candidate_rerank": {
+          "positive": {
+            "requests": 128,
+            "recall@1": 1,
+            "recall@3": 1,
+            "recall@5": 1,
+            "mrr": 1,
+            "latency_ms": {
+              "p50": 490.8946729992749,
+              "p95": 623.6930505066991,
+              "mean": 393.6432869692226
+            }
+          },
+          "answerable_empty_rate": 0,
+          "negative_nonempty_rate": 0.125,
+          "independent_positive_queries": 64,
+          "independent_negative_queries": 16,
+          "categories": {
+            "chinese": {
+              "requests": 32,
+              "recall@1": 1,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 1,
+              "latency_ms": {
+                "p50": 507.984771997144,
+                "p95": 562.7298136983882,
+                "mean": 509.61695225078074
+              }
+            },
+            "error_code": {
+              "requests": 32,
+              "recall@1": 1,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 1,
+              "latency_ms": {
+                "p50": 567.5774245028151,
+                "p95": 705.9988966568199,
+                "mean": 585.6974722196355
+              }
+            },
+            "path": {
+              "requests": 32,
+              "recall@1": 1,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 1,
+              "latency_ms": {
+                "p50": 173.47505199722946,
+                "p95": 219.28065739339218,
+                "mean": 171.9628521877894
+              }
+            },
+            "version": {
+              "requests": 32,
+              "recall@1": 1,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 1,
+              "latency_ms": {
+                "p50": 179.56369849707698,
+                "p95": 529.1083024974796,
+                "mean": 307.2958712186846
+              }
+            }
+          },
+          "all_latency_ms": {
+            "p50": 477.9448724948452,
+            "p95": 609.0488973037282,
+            "mean": 374.23330022547816
+          }
+        }
+      },
+      "all": {
+        "baseline": {
+          "positive": {
+            "requests": 256,
+            "recall@1": 0.9375,
+            "recall@3": 1,
+            "recall@5": 1,
+            "mrr": 0.96875,
+            "latency_ms": {
+              "p50": 94.49386550113559,
+              "p95": 147.3821140061773,
+              "mean": 97.95427760593611
+            }
+          },
+          "answerable_empty_rate": 0,
+          "negative_nonempty_rate": 1,
+          "independent_positive_queries": 128,
+          "independent_negative_queries": 32,
+          "categories": {
+            "chinese": {
+              "requests": 64,
+              "recall@1": 0.96875,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.984375,
+              "latency_ms": {
+                "p50": 83.9230419951491,
+                "p95": 129.95596365944945,
+                "mean": 89.32197123544938
+              }
+            },
+            "error_code": {
+              "requests": 64,
+              "recall@1": 0.9375,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.96875,
+              "latency_ms": {
+                "p50": 92.5444009990315,
+                "p95": 156.53008569352093,
+                "mean": 100.14649486106464
+              }
+            },
+            "path": {
+              "requests": 64,
+              "recall@1": 0.96875,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.984375,
+              "latency_ms": {
+                "p50": 101.9894694982213,
+                "p95": 146.90807910446892,
+                "mean": 106.2065153741969
+              }
+            },
+            "version": {
+              "requests": 64,
+              "recall@1": 0.875,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.9375,
+              "latency_ms": {
+                "p50": 95.15573648968711,
+                "p95": 131.9916306056257,
+                "mean": 96.14212895303353
+              }
+            }
+          },
+          "all_latency_ms": {
+            "p50": 96.60875749250408,
+            "p95": 148.03057735407492,
+            "mean": 99.47095494071618
+          }
+        },
+        "baseline_rerank": {
+          "positive": {
+            "requests": 256,
+            "recall@1": 0.859375,
+            "recall@3": 0.9921875,
+            "recall@5": 1,
+            "mrr": 0.927734375,
+            "latency_ms": {
+              "p50": 1385.5704029920162,
+              "p95": 1809.1125867431401,
+              "mean": 1435.0769453750445
+            }
+          },
+          "answerable_empty_rate": 0,
+          "negative_nonempty_rate": 1,
+          "independent_positive_queries": 128,
+          "independent_negative_queries": 32,
+          "categories": {
+            "chinese": {
+              "requests": 64,
+              "recall@1": 0.9375,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.96875,
+              "latency_ms": {
+                "p50": 1276.5709514933405,
+                "p95": 1385.5996364116436,
+                "mean": 1283.3046448124605
+              }
+            },
+            "error_code": {
+              "requests": 64,
+              "recall@1": 1,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 1,
+              "latency_ms": {
+                "p50": 1440.2245199962636,
+                "p95": 1610.0388313017902,
+                "mean": 1463.5742045309144
+              }
+            },
+            "path": {
+              "requests": 64,
+              "recall@1": 0.5625,
+              "recall@3": 0.96875,
+              "recall@5": 1,
+              "mrr": 0.7734375,
+              "latency_ms": {
+                "p50": 1712.311660994601,
+                "p95": 1937.4218102093437,
+                "mean": 1685.6514172964125
+              }
+            },
+            "version": {
+              "requests": 64,
+              "recall@1": 0.9375,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.96875,
+              "latency_ms": {
+                "p50": 1305.7198164970032,
+                "p95": 1419.1616491960303,
+                "mean": 1307.7775148603905
+              }
+            }
+          },
+          "all_latency_ms": {
+            "p50": 1368.725551001262,
+            "p95": 1825.8789601080935,
+            "mean": 1435.485549687337
+          }
+        },
+        "candidate": {
+          "positive": {
+            "requests": 256,
+            "recall@1": 0.9453125,
+            "recall@3": 1,
+            "recall@5": 1,
+            "mrr": 0.97265625,
+            "latency_ms": {
+              "p50": 91.3218174900976,
+              "p95": 138.12145474003046,
+              "mean": 94.34165583553522
+            }
+          },
+          "answerable_empty_rate": 0,
+          "negative_nonempty_rate": 0.5,
+          "independent_positive_queries": 128,
+          "independent_negative_queries": 32,
+          "categories": {
+            "chinese": {
+              "requests": 64,
+              "recall@1": 0.96875,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.984375,
+              "latency_ms": {
+                "p50": 90.9079249977367,
+                "p95": 135.6527869531419,
+                "mean": 93.985982280401
+              }
+            },
+            "error_code": {
+              "requests": 64,
+              "recall@1": 0.9375,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.96875,
+              "latency_ms": {
+                "p50": 91.73453850235092,
+                "p95": 136.20183453967906,
+                "mean": 95.02638799904162
+              }
+            },
+            "path": {
+              "requests": 64,
+              "recall@1": 0.96875,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.984375,
+              "latency_ms": {
+                "p50": 91.76921300240792,
+                "p95": 139.83541854613577,
+                "mean": 95.90510488988002
+              }
+            },
+            "version": {
+              "requests": 64,
+              "recall@1": 0.90625,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.953125,
+              "latency_ms": {
+                "p50": 90.40060699771857,
+                "p95": 134.7532998464885,
+                "mean": 92.44914817281824
+              }
+            }
+          },
+          "all_latency_ms": {
+            "p50": 89.34759650583146,
+            "p95": 138.02754580101464,
+            "mean": 93.05379392180839
+          }
+        },
+        "candidate_rerank": {
+          "positive": {
+            "requests": 256,
+            "recall@1": 0.9609375,
+            "recall@3": 1,
+            "recall@5": 1,
+            "mrr": 0.98046875,
+            "latency_ms": {
+              "p50": 501.9433310008026,
+              "p95": 613.6307110027701,
+              "mean": 417.37160824283137
+            }
+          },
+          "answerable_empty_rate": 0,
+          "negative_nonempty_rate": 0.0625,
+          "independent_positive_queries": 128,
+          "independent_negative_queries": 32,
+          "categories": {
+            "chinese": {
+              "requests": 64,
+              "recall@1": 0.9375,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.96875,
+              "latency_ms": {
+                "p50": 509.8012415037374,
+                "p95": 556.3329070995678,
+                "mean": 509.96364743809863
+              }
+            },
+            "error_code": {
+              "requests": 64,
+              "recall@1": 1,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 1,
+              "latency_ms": {
+                "p50": 566.7442835037946,
+                "p95": 680.7113506998575,
+                "mean": 577.1360748440202
+              }
+            },
+            "path": {
+              "requests": 64,
+              "recall@1": 0.9375,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.96875,
+              "latency_ms": {
+                "p50": 192.10727900644997,
+                "p95": 600.9341310018498,
+                "mean": 260.05677140665284
+              }
+            },
+            "version": {
+              "requests": 64,
+              "recall@1": 0.96875,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.984375,
+              "latency_ms": {
+                "p50": 205.75323999946704,
+                "p95": 543.749515307718,
+                "mean": 322.3299392825538
+              }
+            }
+          },
+          "all_latency_ms": {
+            "p50": 488.10473149933387,
+            "p95": 609.2828424523759,
+            "mean": 394.92084286325735
+          }
+        }
+      }
+    },
+    "changed_answer_ranks_between_repetitions": [],
+    "paired_latency_differences_ms": {
+      "baseline -> baseline_rerank": {
+        "p50": 1270.5477090057684,
+        "p95": 1717.529433454911,
+        "mean": 1336.0145947466208
+      },
+      "candidate -> candidate_rerank": {
+        "p50": 395.21644751221174,
+        "p95": 519.7386764019029,
+        "mean": 301.86704894144896
+      },
+      "baseline_rerank -> candidate_rerank": {
+        "p50": -881.1533350017271,
+        "p95": -714.275306296622,
+        "mean": -1040.5647068240796
+      }
+    },
+    "rounds": {
+      "0": {
+        "baseline": {
+          "positive": {
+            "requests": 128,
+            "recall@1": 0.9375,
+            "recall@3": 1,
+            "recall@5": 1,
+            "mrr": 0.96875,
+            "latency_ms": {
+              "p50": 97.21628099941881,
+              "p95": 153.1852548039751,
+              "mean": 100.82165730489123
+            }
+          },
+          "answerable_empty_rate": 0,
+          "negative_nonempty_rate": 1,
+          "independent_positive_queries": 128,
+          "independent_negative_queries": 32,
+          "categories": {
+            "chinese": {
+              "requests": 32,
+              "recall@1": 0.96875,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.984375,
+              "latency_ms": {
+                "p50": 87.60172800248256,
+                "p95": 132.01554885672522,
+                "mean": 90.46214450108891
+              }
+            },
+            "error_code": {
+              "requests": 32,
+              "recall@1": 0.9375,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.96875,
+              "latency_ms": {
+                "p50": 94.1005239947117,
+                "p95": 162.9096126969671,
+                "mean": 103.25680993946662
+              }
+            },
+            "path": {
+              "requests": 32,
+              "recall@1": 0.96875,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.984375,
+              "latency_ms": {
+                "p50": 109.37305699189892,
+                "p95": 151.1018089549907,
+                "mean": 114.30394927901943
+              }
+            },
+            "version": {
+              "requests": 32,
+              "recall@1": 0.875,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.9375,
+              "latency_ms": {
+                "p50": 92.77065749483882,
+                "p95": 131.6709351434838,
+                "mean": 95.26372549998996
+              }
+            }
+          },
+          "all_latency_ms": {
+            "p50": 99.5064135058783,
+            "p95": 153.46014565293441,
+            "mean": 102.91522917495968
+          }
+        },
+        "baseline_rerank": {
+          "positive": {
+            "requests": 128,
+            "recall@1": 0.859375,
+            "recall@3": 0.9921875,
+            "recall@5": 1,
+            "mrr": 0.927734375,
+            "latency_ms": {
+              "p50": 1379.3181000000914,
+              "p95": 1788.8127586033079,
+              "mean": 1426.417970148691
+            }
+          },
+          "answerable_empty_rate": 0,
+          "negative_nonempty_rate": 1,
+          "independent_positive_queries": 128,
+          "independent_negative_queries": 32,
+          "categories": {
+            "chinese": {
+              "requests": 32,
+              "recall@1": 0.9375,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.96875,
+              "latency_ms": {
+                "p50": 1284.109107509721,
+                "p95": 1381.6291868126427,
+                "mean": 1282.0254522516734
+              }
+            },
+            "error_code": {
+              "requests": 32,
+              "recall@1": 1,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 1,
+              "latency_ms": {
+                "p50": 1430.0946459989063,
+                "p95": 1570.5470178472751,
+                "mean": 1451.82496843654
+              }
+            },
+            "path": {
+              "requests": 32,
+              "recall@1": 0.5625,
+              "recall@3": 0.96875,
+              "recall@5": 1,
+              "mrr": 0.7734375,
+              "latency_ms": {
+                "p50": 1697.0381680075661,
+                "p95": 1911.315000950708,
+                "mean": 1674.022341780983
+              }
+            },
+            "version": {
+              "requests": 32,
+              "recall@1": 0.9375,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.96875,
+              "latency_ms": {
+                "p50": 1289.6395815041615,
+                "p95": 1388.054422352434,
+                "mean": 1297.7991181255675
+              }
+            }
+          },
+          "all_latency_ms": {
+            "p50": 1362.6232634996995,
+            "p95": 1812.7288479430715,
+            "mean": 1423.7419049374694
+          }
+        },
+        "candidate": {
+          "positive": {
+            "requests": 128,
+            "recall@1": 0.9453125,
+            "recall@3": 1,
+            "recall@5": 1,
+            "mrr": 0.97265625,
+            "latency_ms": {
+              "p50": 92.60470700246515,
+              "p95": 137.10780949259058,
+              "mean": 96.37707067122392
+            }
+          },
+          "answerable_empty_rate": 0,
+          "negative_nonempty_rate": 0.5,
+          "independent_positive_queries": 128,
+          "independent_negative_queries": 32,
+          "categories": {
+            "chinese": {
+              "requests": 32,
+              "recall@1": 0.96875,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.984375,
+              "latency_ms": {
+                "p50": 96.10631000396097,
+                "p95": 135.8468245518452,
+                "mean": 99.39491274872125
+              }
+            },
+            "error_code": {
+              "requests": 32,
+              "recall@1": 0.9375,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.96875,
+              "latency_ms": {
+                "p50": 93.244258503546,
+                "p95": 141.11518879290088,
+                "mean": 99.03434943680622
+              }
+            },
+            "path": {
+              "requests": 32,
+              "recall@1": 0.96875,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.984375,
+              "latency_ms": {
+                "p50": 90.80104750319151,
+                "p95": 142.51456359779695,
+                "mean": 97.54331846852438
+              }
+            },
+            "version": {
+              "requests": 32,
+              "recall@1": 0.90625,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.953125,
+              "latency_ms": {
+                "p50": 89.70241199131124,
+                "p95": 116.96459204758867,
+                "mean": 89.53570203084382
+              }
+            }
+          },
+          "all_latency_ms": {
+            "p50": 91.87333250156371,
+            "p95": 140.08177654686727,
+            "mean": 95.0114601558198
+          }
+        },
+        "candidate_rerank": {
+          "positive": {
+            "requests": 128,
+            "recall@1": 0.9609375,
+            "recall@3": 1,
+            "recall@5": 1,
+            "mrr": 0.98046875,
+            "latency_ms": {
+              "p50": 496.7431095064967,
+              "p95": 611.7202364039258,
+              "mean": 417.4576147189555
+            }
+          },
+          "answerable_empty_rate": 0,
+          "negative_nonempty_rate": 0.0625,
+          "independent_positive_queries": 128,
+          "independent_negative_queries": 32,
+          "categories": {
+            "chinese": {
+              "requests": 32,
+              "recall@1": 0.9375,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.96875,
+              "latency_ms": {
+                "p50": 509.76697999431053,
+                "p95": 551.471360350115,
+                "mean": 507.3196609682782
+              }
+            },
+            "error_code": {
+              "requests": 32,
+              "recall@1": 1,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 1,
+              "latency_ms": {
+                "p50": 577.0714175014291,
+                "p95": 661.4629962074105,
+                "mean": 579.4651765941126
+              }
+            },
+            "path": {
+              "requests": 32,
+              "recall@1": 0.9375,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.96875,
+              "latency_ms": {
+                "p50": 190.7062495010905,
+                "p95": 596.5460299477854,
+                "mean": 264.5982721874134
+              }
+            },
+            "version": {
+              "requests": 32,
+              "recall@1": 0.96875,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.984375,
+              "latency_ms": {
+                "p50": 195.714499001042,
+                "p95": 530.7651372553664,
+                "mean": 318.4473491260178
+              }
+            }
+          },
+          "all_latency_ms": {
+            "p50": 485.65953750221524,
+            "p95": 609.0488973037282,
+            "mean": 394.2740388440143
+          }
+        }
+      },
+      "1": {
+        "baseline": {
+          "positive": {
+            "requests": 128,
+            "recall@1": 0.9375,
+            "recall@3": 1,
+            "recall@5": 1,
+            "mrr": 0.96875,
+            "latency_ms": {
+              "p50": 91.33825950266328,
+              "p95": 140.9821897439542,
+              "mean": 95.086897906981
+            }
+          },
+          "answerable_empty_rate": 0,
+          "negative_nonempty_rate": 1,
+          "independent_positive_queries": 128,
+          "independent_negative_queries": 32,
+          "categories": {
+            "chinese": {
+              "requests": 32,
+              "recall@1": 0.96875,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.984375,
+              "latency_ms": {
+                "p50": 82.11082849447848,
+                "p95": 123.25473245145986,
+                "mean": 88.18179796980985
+              }
+            },
+            "error_code": {
+              "requests": 32,
+              "recall@1": 0.9375,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.96875,
+              "latency_ms": {
+                "p50": 92.5444009990315,
+                "p95": 137.78620939337998,
+                "mean": 97.03617978266266
+              }
+            },
+            "path": {
+              "requests": 32,
+              "recall@1": 0.96875,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.984375,
+              "latency_ms": {
+                "p50": 92.39602649904555,
+                "p95": 143.6624745001609,
+                "mean": 98.10908146937436
+              }
+            },
+            "version": {
+              "requests": 32,
+              "recall@1": 0.875,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.9375,
+              "latency_ms": {
+                "p50": 95.24332849832717,
+                "p95": 130.5025118534104,
+                "mean": 97.02053240607711
+              }
+            }
+          },
+          "all_latency_ms": {
+            "p50": 92.9369135046727,
+            "p95": 142.70402104593813,
+            "mean": 96.02668070647269
+          }
+        },
+        "baseline_rerank": {
+          "positive": {
+            "requests": 128,
+            "recall@1": 0.859375,
+            "recall@3": 0.9921875,
+            "recall@5": 1,
+            "mrr": 0.927734375,
+            "latency_ms": {
+              "p50": 1403.7692455021897,
+              "p95": 1817.4096639515483,
+              "mean": 1443.735920601398
+            }
+          },
+          "answerable_empty_rate": 0,
+          "negative_nonempty_rate": 1,
+          "independent_positive_queries": 128,
+          "independent_negative_queries": 32,
+          "categories": {
+            "chinese": {
+              "requests": 32,
+              "recall@1": 0.9375,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.96875,
+              "latency_ms": {
+                "p50": 1272.2379589977209,
+                "p95": 1397.718523700314,
+                "mean": 1284.5838373732477
+              }
+            },
+            "error_code": {
+              "requests": 32,
+              "recall@1": 1,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 1,
+              "latency_ms": {
+                "p50": 1463.5312444952433,
+                "p95": 1623.800877254689,
+                "mean": 1475.3234406252886
+              }
+            },
+            "path": {
+              "requests": 32,
+              "recall@1": 0.5625,
+              "recall@3": 0.96875,
+              "recall@5": 1,
+              "mrr": 0.7734375,
+              "latency_ms": {
+                "p50": 1730.8692270016763,
+                "p95": 1941.8166536044737,
+                "mean": 1697.2804928118421
+              }
+            },
+            "version": {
+              "requests": 32,
+              "recall@1": 0.9375,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.96875,
+              "latency_ms": {
+                "p50": 1313.1631450014538,
+                "p95": 1456.6697195536108,
+                "mean": 1317.7559115952135
+              }
+            }
+          },
+          "all_latency_ms": {
+            "p50": 1388.3109955058899,
+            "p95": 1843.5013777991114,
+            "mean": 1447.2291944372046
+          }
+        },
+        "candidate": {
+          "positive": {
+            "requests": 128,
+            "recall@1": 0.9453125,
+            "recall@3": 1,
+            "recall@5": 1,
+            "mrr": 0.97265625,
+            "latency_ms": {
+              "p50": 86.59019300102955,
+              "p95": 137.48707969571112,
+              "mean": 92.30624099984652
+            }
+          },
+          "answerable_empty_rate": 0,
+          "negative_nonempty_rate": 0.5,
+          "independent_positive_queries": 128,
+          "independent_negative_queries": 32,
+          "categories": {
+            "chinese": {
+              "requests": 32,
+              "recall@1": 0.96875,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.984375,
+              "latency_ms": {
+                "p50": 83.89727250323631,
+                "p95": 125.77960639900994,
+                "mean": 88.57705181208075
+              }
+            },
+            "error_code": {
+              "requests": 32,
+              "recall@1": 0.9375,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.96875,
+              "latency_ms": {
+                "p50": 84.62220449291635,
+                "p95": 116.46556784617133,
+                "mean": 91.01842656127701
+              }
+            },
+            "path": {
+              "requests": 32,
+              "recall@1": 0.96875,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.984375,
+              "latency_ms": {
+                "p50": 92.08013649913482,
+                "p95": 136.5311800975178,
+                "mean": 94.26689131123567
+              }
+            },
+            "version": {
+              "requests": 32,
+              "recall@1": 0.90625,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.953125,
+              "latency_ms": {
+                "p50": 91.45590800471837,
+                "p95": 142.87536215488217,
+                "mean": 95.36259431479266
+              }
+            }
+          },
+          "all_latency_ms": {
+            "p50": 85.70348699868191,
+            "p95": 134.40820230171084,
+            "mean": 91.09612768779698
+          }
+        },
+        "candidate_rerank": {
+          "positive": {
+            "requests": 128,
+            "recall@1": 0.9609375,
+            "recall@3": 1,
+            "recall@5": 1,
+            "mrr": 0.98046875,
+            "latency_ms": {
+              "p50": 505.4456664947793,
+              "p95": 613.4144136492978,
+              "mean": 417.28560176670726
+            }
+          },
+          "answerable_empty_rate": 0,
+          "negative_nonempty_rate": 0.0625,
+          "independent_positive_queries": 128,
+          "independent_negative_queries": 32,
+          "categories": {
+            "chinese": {
+              "requests": 32,
+              "recall@1": 0.9375,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.96875,
+              "latency_ms": {
+                "p50": 509.8012415037374,
+                "p95": 577.9533184519096,
+                "mean": 512.6076339079191
+              }
+            },
+            "error_code": {
+              "requests": 32,
+              "recall@1": 1,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 1,
+              "latency_ms": {
+                "p50": 564.4928705005441,
+                "p95": 672.0406298984017,
+                "mean": 574.8069730939278
+              }
+            },
+            "path": {
+              "requests": 32,
+              "recall@1": 0.9375,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.96875,
+              "latency_ms": {
+                "p50": 192.62304100993788,
+                "p95": 590.8951863508264,
+                "mean": 255.5152706258923
+              }
+            },
+            "version": {
+              "requests": 32,
+              "recall@1": 0.96875,
+              "recall@3": 1,
+              "recall@5": 1,
+              "mrr": 0.984375,
+              "latency_ms": {
+                "p50": 210.29886650649132,
+                "p95": 548.2612210063962,
+                "mean": 326.21252943908985
+              }
+            }
+          },
+          "all_latency_ms": {
+            "p50": 498.2366034964798,
+            "p95": 609.5809732985799,
+            "mean": 395.5676468825004
+          }
+        }
+      }
+    }
+  },
+  "raw_jsonl_sha256": "eb2c8c0239c41e4ba458001f4d8379dccced91010cbd28e7e077cd9e26579b49",
+  "raw_artifact": "20 MiB synthetic raw responses are retained in the operator workspace, not bundled in this repository."
+}

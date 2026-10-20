@@ -23,6 +23,7 @@ from mem0.configs.prompts import (
     PROCEDURAL_MEMORY_SYSTEM_PROMPT,
     generate_additive_extraction_prompt,
 )
+from mem0.configs.retrieval import RetrievalPolicy
 from mem0.exceptions import LLMError
 from mem0.exceptions import ValidationError as Mem0ValidationError
 from mem0.exceptions import VectorStoreError
@@ -487,8 +488,11 @@ class _AsyncOSSProject:
 
 
 class Memory(MemoryBase):
+    retrieval_policy = RetrievalPolicy()
+
     def __init__(self, config: MemoryConfig = MemoryConfig()):
         self.config = config
+        self.retrieval_policy = config.retrieval
 
         self.embedding_model = EmbedderFactory.create(
             self.config.embedder.provider,
@@ -1535,10 +1539,17 @@ class Memory(MemoryBase):
         # Apply reranking if enabled and reranker is available
         if rerank and self.reranker and original_memories:
             try:
-                reranked_memories = self.reranker.rerank(query, original_memories, limit)
+                reranked_memories = self.reranker.rerank(
+                    query, self.retrieval_policy.rerank_pool(original_memories), limit
+                )
                 original_memories = reranked_memories
             except Exception as e:
+                if self.retrieval_policy.rerank_min_score is not None:
+                    raise
                 logger.warning(f"Reranking failed, using original results: {e}")
+
+        if rerank:
+            original_memories = self.retrieval_policy.filter_scores(original_memories)
 
         if temporal_usage_notice:
             display_temporal_usage_notice(self, "sync", "search", *temporal_usage_notice)
@@ -1703,6 +1714,8 @@ class Memory(MemoryBase):
         candidates = []
         for mem in semantic_results:
             payload = mem.payload if hasattr(mem, 'payload') else {}
+            if not self.retrieval_policy.matches(query, payload.get("data") or ""):
+                continue
             if not show_expired and _payload_is_expired(payload):
                 continue
             if latest_only and payload.get("superseded_by"):
@@ -2215,8 +2228,11 @@ class Memory(MemoryBase):
 
 
 class AsyncMemory(MemoryBase):
+    retrieval_policy = RetrievalPolicy()
+
     def __init__(self, config: MemoryConfig = MemoryConfig()):
         self.config = config
+        self.retrieval_policy = config.retrieval
 
         self.embedding_model = EmbedderFactory.create(
             self.config.embedder.provider,
@@ -3244,11 +3260,16 @@ class AsyncMemory(MemoryBase):
             try:
                 # Run reranking in thread pool to avoid blocking async loop
                 reranked_memories = await asyncio.to_thread(
-                    self.reranker.rerank, query, original_memories, limit
+                    self.reranker.rerank, query, self.retrieval_policy.rerank_pool(original_memories), limit
                 )
                 original_memories = reranked_memories
             except Exception as e:
+                if self.retrieval_policy.rerank_min_score is not None:
+                    raise
                 logger.warning(f"Reranking failed, using original results: {e}")
+
+        if rerank:
+            original_memories = self.retrieval_policy.filter_scores(original_memories)
 
         if temporal_usage_notice:
             await display_temporal_usage_notice_async(self, "async", "search", *temporal_usage_notice)
@@ -3412,6 +3433,8 @@ class AsyncMemory(MemoryBase):
         candidates = []
         for mem in semantic_results:
             payload = mem.payload if hasattr(mem, 'payload') else {}
+            if not self.retrieval_policy.matches(query, payload.get("data") or ""):
+                continue
             if not show_expired and _payload_is_expired(payload):
                 continue
             if latest_only and payload.get("superseded_by"):

@@ -181,6 +181,49 @@ process; changing the environment requires a restart. Installing NLP does not
 rebuild historical entity or lexical indexes, and English NLP should be evaluated
 before enabling it for Chinese or identifier-heavy data.
 
+### Opt-in Python retrieval policy
+
+The SteinX Python fork accepts an optional Memory configuration section named
+"retrieval". All controls are disabled by default and apply to synchronous and
+asynchronous searches. Extend your existing configuration before constructing Memory:
+
+```python
+from mem0 import Memory
+
+config["retrieval"] = {
+    "exact_identifiers": True,
+    "rerank_candidate_limit": 20,
+    "rerank_min_score": 0.05,
+}
+memory = Memory.from_config(config)
+results = memory.search(
+    "What uses /srv/app/config.yaml in version 1.2.3?",
+    filters={"user_id": "example-user"},
+    rerank=True,
+)
+```
+
+| Setting | Behavior |
+| --- | --- |
+| "exact_identifiers" | Require matching common ASCII path or SemVer tokens within the semantic candidate pool, before hybrid scoring. Relative paths may match an absolute path suffix; extensionless directory tokens may match descendants. Paths retain case, except comparisons against Windows drive paths, including relative queries. Slash and backslash separators are normalized. A leading version "v" is ignored; prerelease/build suffixes remain distinct. |
+| "rerank_candidate_limit" | Send at most this many hybrid-ranked candidates to the reranker. This bounds model work and may reduce the number of returned results or recall. Omission leaves the candidate budget unchanged. |
+| "rerank_min_score" | After an explicitly requested rerank, keep only scores at or above this value. Missing/nonfinite scores or an escaping provider error fail the search instead of bypassing the configured gate. Omission retains the existing fallback behavior. |
+
+Choose the score threshold on labeled examples for the exact provider/model.
+The example threshold is not a calibrated probability or a universal
+answer-existence test. Provider-internal fallbacks that emit synthetic scores
+are still subject to this gate; monitor provider warnings.
+With reranking off, the score gate and candidate limit do not apply.
+
+If a query contains several paths or versions, at least one token of each
+present kind must match. This lexical check does not infer negation, current
+state, version ranges, or which of several mentioned identifiers is intended.
+Slash-shaped tokens are treated as literal paths, so this mode is intended for
+identifier lookups rather than unrestricted interpretation of slash expressions.
+Whitespace/non-ASCII paths are outside this matcher; use metadata filters when
+those distinctions must be guaranteed. It does not add independent keyword hits
+to the semantic pool or rewrite historical indexes.
+
 <AccordionGroup>
   <Accordion title="Supported providers">
     - **[Cohere](/components/rerankers/models/cohere)**: Multilingual hosted reranker with API-based scoring.  

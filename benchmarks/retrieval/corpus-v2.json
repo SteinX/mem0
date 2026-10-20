@@ -1,0 +1,1865 @@
+{
+  "description": "160 synthetic queries,512 facts; P0 regressions plus authored coding/ops fixtures. No production memories.",
+  "label_rule": "Each positive has one labeled answer at documents[0]; negatives have no answer.",
+  "split_rule": "P0 plus first8 new subjects per category are dev; remaining16 subjects per category are test. Negatives alternate.",
+  "cases": [
+    {
+      "id": "zh-01",
+      "category": "chinese",
+      "query": "这个用户希望我用什么语言回答？",
+      "documents": [
+        "用户希望默认使用简体中文回复，只有代码和错误原文保留英文。",
+        "另一位测试用户希望默认使用英语回复，只在翻译任务中使用中文。",
+        "项目界面同时支持简体中文和英文，由访客选择。",
+        "中文文档正在翻译成英文，尚未发布。"
+      ],
+      "split": "dev",
+      "origin": "p0-regression"
+    },
+    {
+      "id": "zh-02",
+      "category": "chinese",
+      "query": "用户喜欢什么样的解释长度和操作步骤？",
+      "documents": [
+        "用户偏好简洁回答，先给可执行步骤，再按需要解释原因。",
+        "用户曾在一次教程写作任务中要求详细展开背景，该要求只适用于那篇教程。",
+        "项目要求错误报告包含详细堆栈和全部请求日志。",
+        "安装向导有十二个步骤，只有管理员可以跳过。"
+      ],
+      "split": "dev",
+      "origin": "p0-regression"
+    },
+    {
+      "id": "zh-03",
+      "category": "chinese",
+      "query": "修复完成后，用户要求怎样证明功能真的可用？",
+      "documents": [
+        "用户要求通过实际请求路径验证修复，编译通过或健康检查成功不够。",
+        "旧开发笔记认为测试通过后可以省略实际请求验证，这一做法后来被用户否定。",
+        "健康检查每三十秒运行一次并保存响应时间。",
+        "发布构建使用缓存来缩短编译时间。"
+      ],
+      "split": "dev",
+      "origin": "p0-regression"
+    },
+    {
+      "id": "zh-04",
+      "category": "chinese",
+      "query": "遇到已有未提交修改，用户希望如何处理？",
+      "documents": [
+        "用户要求保留已有未提交修改，在独立工作树中实现新功能。",
+        "旧清理脚本曾在任务开始时清空未提交修改，用户已要求停用该做法。",
+        "备份任务保存工作目录但排除版本库。",
+        "代码评审只检查本次提交涉及的文件。"
+      ],
+      "split": "dev",
+      "origin": "p0-regression"
+    },
+    {
+      "id": "zh-05",
+      "category": "chinese",
+      "query": "给用户展示日程时应该按哪个时区？",
+      "documents": [
+        "用户的日程和报告时间按北京时间 Asia/Shanghai 展示。",
+        "服务器系统时间是 UTC，日志使用协调世界时。",
+        "另一位测试用户的时区为 America/New_York。",
+        "定时备份在每天 UTC 零点启动。"
+      ],
+      "split": "dev",
+      "origin": "p0-regression"
+    },
+    {
+      "id": "zh-06",
+      "category": "chinese",
+      "query": "用户允许什么时候改动投资持仓记录？",
+      "documents": [
+        "用户只允许根据明确确认的已执行交易或对账结果修改持仓。",
+        "模拟研究策略会把建议交易写入模拟组合，不能作为实际持仓账本。",
+        "持仓页面可以按行业和币种筛选。",
+        "模拟组合根据收盘价每天自动再平衡。"
+      ],
+      "split": "dev",
+      "origin": "p0-regression"
+    },
+    {
+      "id": "zh-07",
+      "category": "chinese",
+      "query": "重启服务前用户最在意保留什么？",
+      "documents": [
+        "用户要求重启前保留会话、挂载数据和回滚路径，优先局部优雅重启。",
+        "过时的恢复手册曾建议遇到错误先重启整台机器，用户已拒绝这个默认流程。",
+        "开发环境每天凌晨自动重置所有容器。",
+        "镜像清理任务只删除无引用的旧镜像。"
+      ],
+      "split": "dev",
+      "origin": "p0-regression"
+    },
+    {
+      "id": "zh-08",
+      "category": "chinese",
+      "query": "排查问题时错误文本需要翻译或改写吗？",
+      "documents": [
+        "用户要求保留错误原文和准确标识符，不要在诊断证据里自动翻译或改写。",
+        "旧日志翻译工具会自动简化错误证据，用户已要求禁用该工具。",
+        "用户希望报告的解释段落使用中文。",
+        "错误详情页支持复制整段原始日志。"
+      ],
+      "split": "dev",
+      "origin": "p0-regression"
+    },
+    {
+      "id": "ver-01",
+      "category": "version",
+      "query": "Atlas Core 生产环境当前使用 2.2.1 还是 2.2.0？",
+      "documents": [
+        "Atlas Core 生产环境当前固定为 2.2.1，2.2.0 仅保留作回滚。",
+        "历史记录：Atlas Core 当时运行 2.2.0，升级 2.2.1 在那个时间点尚未批准。",
+        "Atlas Core 测试环境安装了 2.3.0 候选版本。",
+        "Atlas SDK 文档示例仍写 2.0.12。"
+      ],
+      "split": "dev",
+      "origin": "p0-regression"
+    },
+    {
+      "id": "ver-02",
+      "category": "version",
+      "query": "Atlas Sidecar 的线上版本号是什么？",
+      "documents": [
+        "Atlas Sidecar 线上运行 v0.3.13，游标分页已启用。",
+        "Atlas Dashboard 线上运行 v0.3.12。",
+        "Atlas Sidecar 旧回滚镜像为 v0.3.10。",
+        "Atlas Sidecar 计划发布 v0.4.0，目前只有设计文档。"
+      ],
+      "split": "dev",
+      "origin": "p0-regression"
+    },
+    {
+      "id": "ver-03",
+      "category": "version",
+      "query": "Atlas MCP 已经部署 0.1.7 了吗，当前实际跑哪版？",
+      "documents": [
+        "Atlas MCP 已发布 0.1.7 安装包，但线上容器仍运行 0.1.6。",
+        "Atlas MCP 的旧发布预案计划以 0.1.7 替换生产并停止 0.1.6，该预案尚未执行。",
+        "Atlas MCP 0.1.5 曾用于迁移兼容测试。",
+        "Atlas Bridge 的开发分支自报版本 0.2.0-dev。"
+      ],
+      "split": "dev",
+      "origin": "p0-regression"
+    },
+    {
+      "id": "ver-04",
+      "category": "version",
+      "query": "Atlas PostgreSQL 17.11 配套的 pgvector 版本是多少？",
+      "documents": [
+        "Atlas 数据库组合固定为 PostgreSQL 17.11 与 pgvector 0.8.6。",
+        "Atlas 测试数据库使用 PostgreSQL 18.0 与 pgvector 0.8.7。",
+        "旧备份来自 PostgreSQL 16.8 和 pgvector 0.7.4。",
+        "安装手册列出 PostgreSQL 17.0 的通用步骤。"
+      ],
+      "split": "dev",
+      "origin": "p0-regression"
+    },
+    {
+      "id": "ver-05",
+      "category": "version",
+      "query": "Atlas embedding 服务的 TEI CPU 版本是什么？",
+      "documents": [
+        "Atlas embedding 服务运行 TEI cpu-1.9.4，模型为 bge-m3。",
+        "Atlas reranker 试验使用 TEI cpu-1.8.3。",
+        "另一台机器使用 TEI GPU 1.9.4。",
+        "Atlas 旧 embedding 镜像为 cpu-1.7.2。"
+      ],
+      "split": "dev",
+      "origin": "p0-regression"
+    },
+    {
+      "id": "ver-06",
+      "category": "version",
+      "query": "Atlas CLI 生产版本是 0.160.1 吗？",
+      "documents": [
+        "Atlas CLI 生产环境固定为 0.160.1，已通过远程连接验收。",
+        "Atlas CLI 0.160.0 有远程加载超时问题。",
+        "Atlas CLI 0.161.0 尚在测试，不用于生产。",
+        "Atlas Dashboard 版本号为 0.16.1。"
+      ],
+      "split": "dev",
+      "origin": "p0-regression"
+    },
+    {
+      "id": "ver-07",
+      "category": "version",
+      "query": "Atlas agent 当前稳定版本是哪个？",
+      "documents": [
+        "Atlas agent 当前稳定版本是 v0.20.6，安装于独立服务目录。",
+        "Atlas agent v0.20.5 是上一次保留的回滚版本。",
+        "Atlas agent v0.21.0-rc1 仍处于候选测试。",
+        "Atlas 插件内核版本号为 v0.2.6。"
+      ],
+      "split": "dev",
+      "origin": "p0-regression"
+    },
+    {
+      "id": "ver-08",
+      "category": "version",
+      "query": "Atlas Codex memory 插件实际安装的版本是多少？",
+      "documents": [
+        "Atlas Codex memory 插件实际安装版本为 0.3.3，生成自固定上游源码。",
+        "Atlas OpenCode memory 插件版本为 0.4.1。",
+        "Atlas Pi memory 插件版本为 0.3.2。",
+        "Atlas Codex memory 插件旧缓存仍保留 0.3.1。"
+      ],
+      "split": "dev",
+      "origin": "p0-regression"
+    },
+    {
+      "id": "path-01",
+      "category": "path",
+      "query": "Atlas 生产配置准确路径是哪个文件？",
+      "documents": [
+        "Atlas 生产配置文件位于 /srv/atlas/config.yaml。",
+        "Atlas 生产配置备份位于 /srv/atlas/config.yaml.bak。",
+        "Atlas 开发配置文件位于 /srv/atlas-dev/config.yaml。",
+        "Atlas 配置模板位于 /srv/atlas/config.example.yaml。"
+      ],
+      "split": "dev",
+      "origin": "p0-regression"
+    },
+    {
+      "id": "path-02",
+      "category": "path",
+      "query": "Atlas 需要改 deploy/.env，不是仓库根目录的 env，绝对路径是什么？",
+      "documents": [
+        "Atlas 本地部署变量存放在 /workspace/atlas/deploy/.env。",
+        "Atlas 根目录环境变量文件为 /workspace/atlas/.env。",
+        "Atlas 部署示例变量文件为 /workspace/atlas/deploy/.env.example。",
+        "Atlas 备份变量文件为 /backup/atlas/deploy/.env。"
+      ],
+      "split": "dev",
+      "origin": "p0-regression"
+    },
+    {
+      "id": "path-03",
+      "category": "path",
+      "query": "Atlas 记忆历史数据库 history.db 实际存在哪里？",
+      "documents": [
+        "Atlas 记忆历史数据库是 /var/lib/atlas/history/history.db。",
+        "Atlas Sidecar 索引数据库是 /var/lib/atlas/sidecar/index.db。",
+        "Atlas 旧历史备份是 /backup/atlas/history.db。",
+        "Atlas 测试历史数据库是 /tmp/atlas/history.db。"
+      ],
+      "split": "dev",
+      "origin": "p0-regression"
+    },
+    {
+      "id": "path-04",
+      "category": "path",
+      "query": "Atlas 网关当前启用的 nginx 39.conf 位于哪里？",
+      "documents": [
+        "Atlas 网关启用配置为 /data/nginx/proxy_host/39.conf。",
+        "Atlas 网关备份配置为 /data/nginx/proxy_host/39.conf.bak。",
+        "Atlas 网关另一站点配置为 /data/nginx/proxy_host/93.conf。",
+        "Atlas nginx 模板位于 /etc/nginx/templates/39.conf。"
+      ],
+      "split": "dev",
+      "origin": "p0-regression"
+    },
+    {
+      "id": "path-05",
+      "category": "path",
+      "query": "Atlas 财务 profile 的真实持仓文件路径是什么？",
+      "documents": [
+        "Atlas 财务 profile 使用 /workspace/portfolio/portfolio_holdings.yaml 作为实际持仓账本。",
+        "Atlas 财务 profile 的研究草稿是 /workspace/portfolio/holdings-proposal.yaml。",
+        "Atlas 模拟组合位于 /workspace/portfolio/simulated_holdings.yaml。",
+        "Atlas 旧持仓备份位于 /backup/portfolio_holdings.yaml。"
+      ],
+      "split": "dev",
+      "origin": "p0-regression"
+    },
+    {
+      "id": "path-06",
+      "category": "path",
+      "query": "Atlas 原生插件的私有凭据文件放在哪里？",
+      "documents": [
+        "Atlas 原生插件凭据位于 /opt/atlas/private/memory.env，权限为 0600。",
+        "Atlas 原生插件公开清单是 /opt/atlas/plugin/.mcp.json。",
+        "Atlas 凭据示例位于 /opt/atlas/examples/memory.env。",
+        "Atlas 日志目录为 /opt/atlas/logs/memory。"
+      ],
+      "split": "dev",
+      "origin": "p0-regression"
+    },
+    {
+      "id": "path-07",
+      "category": "path",
+      "query": "Atlas 服务真正使用的是 /mnt/user/appdata 还是容器里的 /workspace 路径？",
+      "documents": [
+        "Atlas Docker bind mount 的宿主路径是 /mnt/user/appdata/atlas，容器内映射为 /workspace/atlas。",
+        "旧脚本错误地把容器内路径 /workspace/atlas 当作远端 Docker 宿主路径，后来已修正。",
+        "Atlas 备份根目录为 /mnt/user/backups/atlas。",
+        "Atlas 镜像构建上下文是 /workspace/atlas/source。"
+      ],
+      "split": "dev",
+      "origin": "p0-regression"
+    },
+    {
+      "id": "path-08",
+      "category": "path",
+      "query": "Atlas 的蓝色部署入口脚本是哪一个，不是绿色或备份脚本？",
+      "documents": [
+        "Atlas 蓝色部署入口是 /srv/atlas/releases/blue/bin/start.sh。",
+        "Atlas 绿色部署入口是 /srv/atlas/releases/green/bin/start.sh。",
+        "Atlas 蓝色部署备份脚本是 /srv/atlas/releases/blue/bin/start.sh.old。",
+        "Atlas 蓝色部署停止脚本是 /srv/atlas/releases/blue/bin/stop.sh。"
+      ],
+      "split": "dev",
+      "origin": "p0-regression"
+    },
+    {
+      "id": "err-01",
+      "category": "error_code",
+      "query": "Atlas 出现 ECONNRESET 时，之前确认的原因是什么？",
+      "documents": [
+        "Atlas 的 ECONNRESET 表示已建立的 TCP 连接被对端重置，曾定位到上游代理断开。",
+        "Atlas 的 ECONNREFUSED 表示目标端口拒绝建立连接。",
+        "Atlas 的 ETIMEDOUT 表示连接或读取超过时间预算。",
+        "Atlas 的 ENOTFOUND 表示域名解析失败。"
+      ],
+      "split": "dev",
+      "origin": "p0-regression"
+    },
+    {
+      "id": "err-02",
+      "category": "error_code",
+      "query": "Atlas 日志里的 SQLSTATE 23505 对应哪种问题？",
+      "documents": [
+        "Atlas 的 SQLSTATE 23505 是唯一约束冲突，重复任务键曾触发这个错误。",
+        "Atlas 的 SQLSTATE 23503 是外键约束冲突。",
+        "Atlas 的 SQLSTATE 42P01 是数据库关系或表不存在。",
+        "Atlas 的 SQLSTATE 08006 是连接失败。"
+      ],
+      "split": "dev",
+      "origin": "p0-regression"
+    },
+    {
+      "id": "err-03",
+      "category": "error_code",
+      "query": "Atlas memory add 返回 HTTP 409 时应该检查什么？",
+      "documents": [
+        "Atlas memory add 的 HTTP 409 表示 mutation intent 冲突，应检查原操作状态，避免盲目重放。",
+        "Atlas memory add 的 HTTP 500 曾因 SQLite 写入锁定触发。",
+        "Atlas memory search 的 HTTP 400 表示过滤参数无效。",
+        "Atlas 代理的 HTTP 502 表示后端连接失败。"
+      ],
+      "split": "dev",
+      "origin": "p0-regression"
+    },
+    {
+      "id": "err-04",
+      "category": "error_code",
+      "query": "Atlas Docker 收到 SIGBUS 时，先前证据指向什么？",
+      "documents": [
+        "Atlas Docker 的 SIGBUS 与宿主 SquashFS 读取错误同时出现，需检查宿主读取路径。",
+        "Atlas 程序 SIGSEGV 曾由无效指针访问触发。",
+        "Atlas 容器 SIGTERM 是正常优雅关闭请求。",
+        "Atlas 进程 SIGKILL 表示被强制终止，可能与 OOM 有关。"
+      ],
+      "split": "dev",
+      "origin": "p0-regression"
+    },
+    {
+      "id": "err-05",
+      "category": "error_code",
+      "query": "Atlas 的 EACCES 是什么问题，应检查什么？",
+      "documents": [
+        "Atlas 的 EACCES 是权限不足，应检查目录访问权和允许写入的根目录。",
+        "Atlas 的 ENOENT 是文件或路径不存在。",
+        "Atlas 的 EEXIST 是目标文件已经存在。",
+        "Atlas 的 ENOSPC 是存储空间不足。"
+      ],
+      "split": "dev",
+      "origin": "p0-regression"
+    },
+    {
+      "id": "err-06",
+      "category": "error_code",
+      "query": "Atlas MCP 的 JSON-RPC -32602 是哪类错误？",
+      "documents": [
+        "Atlas MCP 的 JSON-RPC -32602 表示方法参数无效，需检查工具输入。",
+        "Atlas MCP 的 JSON-RPC -32601 表示方法不存在。",
+        "Atlas MCP 的 JSON-RPC -32700 表示 JSON 解析失败。",
+        "Atlas MCP 的 JSON-RPC -32603 表示服务端内部错误。"
+      ],
+      "split": "dev",
+      "origin": "p0-regression"
+    },
+    {
+      "id": "err-07",
+      "category": "error_code",
+      "query": "Atlas API 遇到 HTTP 429，该怎么解释？",
+      "documents": [
+        "Atlas API 的 HTTP 429 是请求频率超限，应遵循 Retry-After 而不是立即密集重试。",
+        "Atlas API 的 HTTP 503 表示服务暂时不可用。",
+        "Atlas API 的 HTTP 401 表示未通过身份验证。",
+        "Atlas API 的 HTTP 403 表示已识别身份但没有权限。"
+      ],
+      "split": "dev",
+      "origin": "p0-regression"
+    },
+    {
+      "id": "err-08",
+      "category": "error_code",
+      "query": "Atlas 的 certificate verify failed 属于 DNS、超时还是证书问题？",
+      "documents": [
+        "Atlas 的 CERTIFICATE_VERIFY_FAILED 表示 TLS 证书验证失败，应核对证书链、主机名和系统时间。",
+        "Atlas 的 NameResolutionError 表示 DNS 域名解析失败。",
+        "Atlas 的 ReadTimeout 表示已连接但等待响应超时。",
+        "Atlas 的 ConnectionRefusedError 表示目标端口拒绝连接。"
+      ],
+      "split": "dev",
+      "origin": "p0-regression"
+    },
+    {
+      "id": "v2-path-00",
+      "category": "path",
+      "split": "dev",
+      "origin": "v2-authored",
+      "query": "Nebula 的路径 /srv/nebula/config.yaml 具体用来做什么？",
+      "documents": [
+        "Nebula 的 /srv/nebula/config.yaml 用于API监听地址。",
+        "Nebula 的 /srv/nebula/config.yml 用于迁移演练，不能当作正式的API监听地址。",
+        "Nebula 的归档目录只保存历史构建，无法控制API监听地址。",
+        "另一套演示服务沿用同名配置，但Nebula不读取那份配置。"
+      ]
+    },
+    {
+      "id": "v2-path-01",
+      "category": "path",
+      "split": "dev",
+      "origin": "v2-authored",
+      "query": "Orion 的路径 deploy/.env 具体用来做什么？",
+      "documents": [
+        "Orion 的 deploy/.env 用于正式部署环境变量。",
+        "Orion 的 .env 用于迁移演练，不能当作正式的正式部署环境变量。",
+        "Orion 的归档目录只保存历史构建，无法控制正式部署环境变量。",
+        "另一套演示服务沿用同名配置，但Orion不读取那份配置。"
+      ]
+    },
+    {
+      "id": "v2-path-02",
+      "category": "path",
+      "split": "dev",
+      "origin": "v2-authored",
+      "query": "Cedar 的路径 /etc/cedar/proxy.conf 具体用来做什么？",
+      "documents": [
+        "Cedar 的 /etc/cedar/proxy.conf 用于反向代理连接超时。",
+        "Cedar 的 /etc/cedar/proxy.conf.bak 用于迁移演练，不能当作正式的反向代理连接超时。",
+        "Cedar 的归档目录只保存历史构建，无法控制反向代理连接超时。",
+        "另一套演示服务沿用同名配置，但Cedar不读取那份配置。"
+      ]
+    },
+    {
+      "id": "v2-path-03",
+      "category": "path",
+      "split": "dev",
+      "origin": "v2-authored",
+      "query": "Quartz 的路径 /opt/quartz/bin/start.sh 具体用来做什么？",
+      "documents": [
+        "Quartz 的 /opt/quartz/bin/start.sh 用于启动正式服务。",
+        "Quartz 的 /opt/quartz/bin/start.sh.old 用于迁移演练，不能当作正式的启动正式服务。",
+        "Quartz 的归档目录只保存历史构建，无法控制启动正式服务。",
+        "另一套演示服务沿用同名配置，但Quartz不读取那份配置。"
+      ]
+    },
+    {
+      "id": "v2-path-04",
+      "category": "path",
+      "split": "dev",
+      "origin": "v2-authored",
+      "query": "Maple 的路径 /var/lib/maple/state.db 具体用来做什么？",
+      "documents": [
+        "Maple 的 /var/lib/maple/state.db 用于持久化任务状态。",
+        "Maple 的 /var/lib/maple/state.db-wal 用于迁移演练，不能当作正式的持久化任务状态。",
+        "Maple 的归档目录只保存历史构建，无法控制持久化任务状态。",
+        "另一套演示服务沿用同名配置，但Maple不读取那份配置。"
+      ]
+    },
+    {
+      "id": "v2-path-05",
+      "category": "path",
+      "split": "dev",
+      "origin": "v2-authored",
+      "query": "Helios 的路径 src/auth/token.ts 具体用来做什么？",
+      "documents": [
+        "Helios 的 src/auth/token.ts 用于访问令牌解析。",
+        "Helios 的 src/auth/tokens.ts 用于迁移演练，不能当作正式的访问令牌解析。",
+        "Helios 的归档目录只保存历史构建，无法控制访问令牌解析。",
+        "另一套演示服务沿用同名配置，但Helios不读取那份配置。"
+      ]
+    },
+    {
+      "id": "v2-path-06",
+      "category": "path",
+      "split": "dev",
+      "origin": "v2-authored",
+      "query": "Willow 的路径 /mnt/user/appdata/willow/config 具体用来做什么？",
+      "documents": [
+        "Willow 的 /mnt/user/appdata/willow/config 用于宿主配置挂载。",
+        "Willow 的 /mnt/user/backups/willow/config 用于迁移演练，不能当作正式的宿主配置挂载。",
+        "Willow 的归档目录只保存历史构建，无法控制宿主配置挂载。",
+        "另一套演示服务沿用同名配置，但Willow不读取那份配置。"
+      ]
+    },
+    {
+      "id": "v2-path-07",
+      "category": "path",
+      "split": "dev",
+      "origin": "v2-authored",
+      "query": "Lumen 的路径 .github/workflows/release.yml 具体用来做什么？",
+      "documents": [
+        "Lumen 的 .github/workflows/release.yml 用于正式Release发布。",
+        "Lumen 的 .github/workflows/release.yaml 用于迁移演练，不能当作正式的正式Release发布。",
+        "Lumen 的归档目录只保存历史构建，无法控制正式Release发布。",
+        "另一套演示服务沿用同名配置，但Lumen不读取那份配置。"
+      ]
+    },
+    {
+      "id": "v2-path-08",
+      "category": "path",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Harbor 的路径 /srv/harbor/blue/start.sh 具体用来做什么？",
+      "documents": [
+        "Harbor 的 /srv/harbor/blue/start.sh 用于蓝色部署启动。",
+        "Harbor 的 /srv/harbor/green/start.sh 用于迁移演练，不能当作正式的蓝色部署启动。",
+        "Harbor 的归档目录只保存历史构建，无法控制蓝色部署启动。",
+        "另一套演示服务沿用同名配置，但Harbor不读取那份配置。"
+      ]
+    },
+    {
+      "id": "v2-path-09",
+      "category": "path",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Beacon 的路径 /v1/memories/search 具体用来做什么？",
+      "documents": [
+        "Beacon 的 /v1/memories/search 用于记忆搜索路由。",
+        "Beacon 的 /v1/memory/search 用于迁移演练，不能当作正式的记忆搜索路由。",
+        "Beacon 的归档目录只保存历史构建，无法控制记忆搜索路由。",
+        "另一套演示服务沿用同名配置，但Beacon不读取那份配置。"
+      ]
+    },
+    {
+      "id": "v2-path-10",
+      "category": "path",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Cobalt 的路径 /opt/cobalt/private/key.env 具体用来做什么？",
+      "documents": [
+        "Cobalt 的 /opt/cobalt/private/key.env 用于本机凭据加载。",
+        "Cobalt 的 /opt/cobalt/examples/key.env 用于迁移演练，不能当作正式的本机凭据加载。",
+        "Cobalt 的归档目录只保存历史构建，无法控制本机凭据加载。",
+        "另一套演示服务沿用同名配置，但Cobalt不读取那份配置。"
+      ]
+    },
+    {
+      "id": "v2-path-11",
+      "category": "path",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Vega 的路径 packages/api/package.json 具体用来做什么？",
+      "documents": [
+        "Vega 的 packages/api/package.json 用于API包版本声明。",
+        "Vega 的 packages/web/package.json 用于迁移演练，不能当作正式的API包版本声明。",
+        "Vega 的归档目录只保存历史构建，无法控制API包版本声明。",
+        "另一套演示服务沿用同名配置，但Vega不读取那份配置。"
+      ]
+    },
+    {
+      "id": "v2-path-12",
+      "category": "path",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Juniper 的路径 /data/juniper/index.sqlite3 具体用来做什么？",
+      "documents": [
+        "Juniper 的 /data/juniper/index.sqlite3 用于搜索索引。",
+        "Juniper 的 /data/juniper/history.sqlite3 用于迁移演练，不能当作正式的搜索索引。",
+        "Juniper 的归档目录只保存历史构建，无法控制搜索索引。",
+        "另一套演示服务沿用同名配置，但Juniper不读取那份配置。"
+      ]
+    },
+    {
+      "id": "v2-path-13",
+      "category": "path",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Sable 的路径 /srv/sable/prod/settings.toml 具体用来做什么？",
+      "documents": [
+        "Sable 的 /srv/sable/prod/settings.toml 用于生产服务设置。",
+        "Sable 的 /srv/sable/dev/settings.toml 用于迁移演练，不能当作正式的生产服务设置。",
+        "Sable 的归档目录只保存历史构建，无法控制生产服务设置。",
+        "另一套演示服务沿用同名配置，但Sable不读取那份配置。"
+      ]
+    },
+    {
+      "id": "v2-path-14",
+      "category": "path",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Mistral 的路径 config/reranker.json 具体用来做什么？",
+      "documents": [
+        "Mistral 的 config/reranker.json 用于重排模型设置。",
+        "Mistral 的 config/embedder.json 用于迁移演练，不能当作正式的重排模型设置。",
+        "Mistral 的归档目录只保存历史构建，无法控制重排模型设置。",
+        "另一套演示服务沿用同名配置，但Mistral不读取那份配置。"
+      ]
+    },
+    {
+      "id": "v2-path-15",
+      "category": "path",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Nova 的路径 /opt/nova/releases/current 具体用来做什么？",
+      "documents": [
+        "Nova 的 /opt/nova/releases/current 用于当前发布软链接。",
+        "Nova 的 /opt/nova/releases/previous 用于迁移演练，不能当作正式的当前发布软链接。",
+        "Nova 的归档目录只保存历史构建，无法控制当前发布软链接。",
+        "另一套演示服务沿用同名配置，但Nova不读取那份配置。"
+      ]
+    },
+    {
+      "id": "v2-path-16",
+      "category": "path",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Copper 的路径 /var/log/copper/access.log 具体用来做什么？",
+      "documents": [
+        "Copper 的 /var/log/copper/access.log 用于HTTP访问日志。",
+        "Copper 的 /var/log/copper/error.log 用于迁移演练，不能当作正式的HTTP访问日志。",
+        "Copper 的归档目录只保存历史构建，无法控制HTTP访问日志。",
+        "另一套演示服务沿用同名配置，但Copper不读取那份配置。"
+      ]
+    },
+    {
+      "id": "v2-path-17",
+      "category": "path",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Delta 的路径 scripts/backup/postgres.sh 具体用来做什么？",
+      "documents": [
+        "Delta 的 scripts/backup/postgres.sh 用于PostgreSQL逻辑备份。",
+        "Delta 的 scripts/backup/sqlite.sh 用于迁移演练，不能当作正式的PostgreSQL逻辑备份。",
+        "Delta 的归档目录只保存历史构建，无法控制PostgreSQL逻辑备份。",
+        "另一套演示服务沿用同名配置，但Delta不读取那份配置。"
+      ]
+    },
+    {
+      "id": "v2-path-18",
+      "category": "path",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Eon 的路径 /etc/eon/ssl/fullchain.pem 具体用来做什么？",
+      "documents": [
+        "Eon 的 /etc/eon/ssl/fullchain.pem 用于TLS完整证书链。",
+        "Eon 的 /etc/eon/ssl/privkey.pem 用于迁移演练，不能当作正式的TLS完整证书链。",
+        "Eon 的归档目录只保存历史构建，无法控制TLS完整证书链。",
+        "另一套演示服务沿用同名配置，但Eon不读取那份配置。"
+      ]
+    },
+    {
+      "id": "v2-path-19",
+      "category": "path",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Falcon 的路径 server/main.py 具体用来做什么？",
+      "documents": [
+        "Falcon 的 server/main.py 用于REST服务入口。",
+        "Falcon 的 client/main.py 用于迁移演练，不能当作正式的REST服务入口。",
+        "Falcon 的归档目录只保存历史构建，无法控制REST服务入口。",
+        "另一套演示服务沿用同名配置，但Falcon不读取那份配置。"
+      ]
+    },
+    {
+      "id": "v2-path-20",
+      "category": "path",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Garnet 的路径 C:\\Ops\\garnet\\settings.json 具体用来做什么？",
+      "documents": [
+        "Garnet 的 C:\\Ops\\garnet\\settings.json 用于Windows服务配置。",
+        "Garnet 的 C:\\Ops\\garnet\\settings.json.bak 用于迁移演练，不能当作正式的Windows服务配置。",
+        "Garnet 的归档目录只保存历史构建，无法控制Windows服务配置。",
+        "另一套演示服务沿用同名配置，但Garnet不读取那份配置。"
+      ]
+    },
+    {
+      "id": "v2-path-21",
+      "category": "path",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Indigo 的路径 /Users/demo/indigo/.mcp.json 具体用来做什么？",
+      "documents": [
+        "Indigo 的 /Users/demo/indigo/.mcp.json 用于原生MCP启动清单。",
+        "Indigo 的 /Users/demo/indigo/mcp.json 用于迁移演练，不能当作正式的原生MCP启动清单。",
+        "Indigo 的归档目录只保存历史构建，无法控制原生MCP启动清单。",
+        "另一套演示服务沿用同名配置，但Indigo不读取那份配置。"
+      ]
+    },
+    {
+      "id": "v2-path-22",
+      "category": "path",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Kestrel 的路径 ./config/local.yaml 具体用来做什么？",
+      "documents": [
+        "Kestrel 的 ./config/local.yaml 用于开发机覆盖设置。",
+        "Kestrel 的 ./config/local.yml 用于迁移演练，不能当作正式的开发机覆盖设置。",
+        "Kestrel 的归档目录只保存历史构建，无法控制开发机覆盖设置。",
+        "另一套演示服务沿用同名配置，但Kestrel不读取那份配置。"
+      ]
+    },
+    {
+      "id": "v2-path-23",
+      "category": "path",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Lotus 的路径 /srv/lotus/cache-v2/index 具体用来做什么？",
+      "documents": [
+        "Lotus 的 /srv/lotus/cache-v2/index 用于第二代缓存索引。",
+        "Lotus 的 /srv/lotus/cache-v1/index 用于迁移演练，不能当作正式的第二代缓存索引。",
+        "Lotus 的归档目录只保存历史构建，无法控制第二代缓存索引。",
+        "另一套演示服务沿用同名配置，但Lotus不读取那份配置。"
+      ]
+    },
+    {
+      "id": "v2-ver-00",
+      "category": "version",
+      "split": "dev",
+      "origin": "v2-authored",
+      "query": "Amber 版本 1.2.3 引入了什么变更？",
+      "documents": [
+        "Amber 正式服务当前固定版本 1.2.3，该版修复请求去重。",
+        "Amber 历史版本 1.2.30 仍保留作回滚，那时尚未修复请求去重。",
+        "Amber 的演示镜像显示99.0.0，这不是正式部署。",
+        "Amber 下次升级尚未获批，开发分支的版本不能代表运行态。"
+      ]
+    },
+    {
+      "id": "v2-ver-01",
+      "category": "version",
+      "split": "dev",
+      "origin": "v2-authored",
+      "query": "Birch 的正式服务当前运行哪个版本，有什么改进？",
+      "documents": [
+        "Birch 正式服务当前固定版本 v0.4.12，该版增加游标分页。",
+        "Birch 历史版本 v0.4.1 仍保留作回滚，那时尚未增加游标分页。",
+        "Birch 的演示镜像显示99.0.0，这不是正式部署。",
+        "Birch 下次升级尚未获批，开发分支的版本不能代表运行态。"
+      ]
+    },
+    {
+      "id": "v2-ver-02",
+      "category": "version",
+      "split": "dev",
+      "origin": "v2-authored",
+      "query": "Canyon 版本 2.10.0 引入了什么变更？",
+      "documents": [
+        "Canyon 正式服务当前固定版本 2.10.0，该版启用新的缓存布局。",
+        "Canyon 历史版本 2.1.0 仍保留作回滚，那时尚未启用新的缓存布局。",
+        "Canyon 的演示镜像显示99.0.0，这不是正式部署。",
+        "Canyon 下次升级尚未获批，开发分支的版本不能代表运行态。"
+      ]
+    },
+    {
+      "id": "v2-ver-03",
+      "category": "version",
+      "split": "dev",
+      "origin": "v2-authored",
+      "query": "Dawn 版本 v3.0.0-rc.2 引入了什么变更？",
+      "documents": [
+        "Dawn 正式服务当前固定版本 v3.0.0-rc.2，该版试运行严格布尔校验。",
+        "Dawn 历史版本 v3.0.0-rc.20 仍保留作回滚，那时尚未试运行严格布尔校验。",
+        "Dawn 的演示镜像显示99.0.0，这不是正式部署。",
+        "Dawn 下次升级尚未获批，开发分支的版本不能代表运行态。"
+      ]
+    },
+    {
+      "id": "v2-ver-04",
+      "category": "version",
+      "split": "dev",
+      "origin": "v2-authored",
+      "query": "Elm 版本 1.8.0+build.7 引入了什么变更？",
+      "documents": [
+        "Elm 正式服务当前固定版本 1.8.0+build.7，该版包含补丁构建七。",
+        "Elm 历史版本 1.8.0+build.70 仍保留作回滚，那时尚未包含补丁构建七。",
+        "Elm 的演示镜像显示99.0.0，这不是正式部署。",
+        "Elm 下次升级尚未获批，开发分支的版本不能代表运行态。"
+      ]
+    },
+    {
+      "id": "v2-ver-05",
+      "category": "version",
+      "split": "dev",
+      "origin": "v2-authored",
+      "query": "Fjord 的正式服务当前运行哪个版本，有什么改进？",
+      "documents": [
+        "Fjord 正式服务当前固定版本 0.16.4，该版修复连接释放。",
+        "Fjord 历史版本 0.16.40 仍保留作回滚，那时尚未修复连接释放。",
+        "Fjord 的演示镜像显示99.0.0，这不是正式部署。",
+        "Fjord 下次升级尚未获批，开发分支的版本不能代表运行态。"
+      ]
+    },
+    {
+      "id": "v2-ver-06",
+      "category": "version",
+      "split": "dev",
+      "origin": "v2-authored",
+      "query": "Glade 版本 v12.2.1 引入了什么变更？",
+      "documents": [
+        "Glade 正式服务当前固定版本 v12.2.1，该版迁移分类表。",
+        "Glade 历史版本 v2.2.1 仍保留作回滚，那时尚未迁移分类表。",
+        "Glade 的演示镜像显示99.0.0，这不是正式部署。",
+        "Glade 下次升级尚未获批，开发分支的版本不能代表运行态。"
+      ]
+    },
+    {
+      "id": "v2-ver-07",
+      "category": "version",
+      "split": "dev",
+      "origin": "v2-authored",
+      "query": "Haze 的正式服务当前运行哪个版本，有什么改进？",
+      "documents": [
+        "Haze 正式服务当前固定版本 2.2.1-steinx.5，该版保留通用type字段的分类和TTL。",
+        "Haze 历史版本 2.2.1-steinx.4 仍保留作回滚，那时尚未保留通用type字段的分类和TTL。",
+        "Haze 的演示镜像显示99.0.0，这不是正式部署。",
+        "Haze 下次升级尚未获批，开发分支的版本不能代表运行态。"
+      ]
+    },
+    {
+      "id": "v2-ver-08",
+      "category": "version",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Iris 版本 v4.5.6 引入了什么变更？",
+      "documents": [
+        "Iris 正式服务当前固定版本 v4.5.6，该版默认关闭遥测。",
+        "Iris 历史版本 v4.5.60 仍保留作回滚，那时尚未默认关闭遥测。",
+        "Iris 的演示镜像显示99.0.0，这不是正式部署。",
+        "Iris 下次升级尚未获批，开发分支的版本不能代表运行态。"
+      ]
+    },
+    {
+      "id": "v2-ver-09",
+      "category": "version",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Jade 的正式服务当前运行哪个版本，有什么改进？",
+      "documents": [
+        "Jade 正式服务当前固定版本 7.0.12，该版支持离线加载。",
+        "Jade 历史版本 7.0.1 仍保留作回滚，那时尚未支持离线加载。",
+        "Jade 的演示镜像显示99.0.0，这不是正式部署。",
+        "Jade 下次升级尚未获批，开发分支的版本不能代表运行态。"
+      ]
+    },
+    {
+      "id": "v2-ver-10",
+      "category": "version",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Koala 版本 0.3.15 引入了什么变更？",
+      "documents": [
+        "Koala 正式服务当前固定版本 0.3.15，该版持久化访问计数。",
+        "Koala 历史版本 0.3.5 仍保留作回滚，那时尚未持久化访问计数。",
+        "Koala 的演示镜像显示99.0.0，这不是正式部署。",
+        "Koala 下次升级尚未获批，开发分支的版本不能代表运行态。"
+      ]
+    },
+    {
+      "id": "v2-ver-11",
+      "category": "version",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Larch 版本 2.0.0-beta.3 引入了什么变更？",
+      "documents": [
+        "Larch 正式服务当前固定版本 2.0.0-beta.3，该版新增实验性日期过滤。",
+        "Larch 历史版本 2.0.0-beta.30 仍保留作回滚，那时尚未新增实验性日期过滤。",
+        "Larch 的演示镜像显示99.0.0，这不是正式部署。",
+        "Larch 下次升级尚未获批，开发分支的版本不能代表运行态。"
+      ]
+    },
+    {
+      "id": "v2-ver-12",
+      "category": "version",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Mango 版本 v6.1.4 引入了什么变更？",
+      "documents": [
+        "Mango 正式服务当前固定版本 v6.1.4，该版更正错误响应格式。",
+        "Mango 历史版本 v6.1.3 仍保留作回滚，那时尚未更正错误响应格式。",
+        "Mango 的演示镜像显示99.0.0，这不是正式部署。",
+        "Mango 下次升级尚未获批，开发分支的版本不能代表运行态。"
+      ]
+    },
+    {
+      "id": "v2-ver-13",
+      "category": "version",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Nimbus 的正式服务当前运行哪个版本，有什么改进？",
+      "documents": [
+        "Nimbus 正式服务当前固定版本 10.4.2，该版修复断点恢复。",
+        "Nimbus 历史版本 10.4.1 仍保留作回滚，那时尚未修复断点恢复。",
+        "Nimbus 的演示镜像显示99.0.0，这不是正式部署。",
+        "Nimbus 下次升级尚未获批，开发分支的版本不能代表运行态。"
+      ]
+    },
+    {
+      "id": "v2-ver-14",
+      "category": "version",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Olive 版本 0.9.8 引入了什么变更？",
+      "documents": [
+        "Olive 正式服务当前固定版本 0.9.8，该版限制查询长度。",
+        "Olive 历史版本 0.9.7 仍保留作回滚，那时尚未限制查询长度。",
+        "Olive 的演示镜像显示99.0.0，这不是正式部署。",
+        "Olive 下次升级尚未获批，开发分支的版本不能代表运行态。"
+      ]
+    },
+    {
+      "id": "v2-ver-15",
+      "category": "version",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Pine 的正式服务当前运行哪个版本，有什么改进？",
+      "documents": [
+        "Pine 正式服务当前固定版本 v1.11.0，该版增加导出校验。",
+        "Pine 历史版本 v1.1.0 仍保留作回滚，那时尚未增加导出校验。",
+        "Pine 的演示镜像显示99.0.0，这不是正式部署。",
+        "Pine 下次升级尚未获批，开发分支的版本不能代表运行态。"
+      ]
+    },
+    {
+      "id": "v2-ver-16",
+      "category": "version",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Ruby 版本 5.2.0 引入了什么变更？",
+      "documents": [
+        "Ruby 正式服务当前固定版本 5.2.0，该版修复跨应用过滤。",
+        "Ruby 历史版本 5.1.0 仍保留作回滚，那时尚未修复跨应用过滤。",
+        "Ruby 的演示镜像显示99.0.0，这不是正式部署。",
+        "Ruby 下次升级尚未获批，开发分支的版本不能代表运行态。"
+      ]
+    },
+    {
+      "id": "v2-ver-17",
+      "category": "version",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Spruce 的正式服务当前运行哪个版本，有什么改进？",
+      "documents": [
+        "Spruce 正式服务当前固定版本 v0.12.6，该版增加访问事件。",
+        "Spruce 历史版本 v0.12.5 仍保留作回滚，那时尚未增加访问事件。",
+        "Spruce 的演示镜像显示99.0.0，这不是正式部署。",
+        "Spruce 下次升级尚未获批，开发分支的版本不能代表运行态。"
+      ]
+    },
+    {
+      "id": "v2-ver-18",
+      "category": "version",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Topaz 版本 3.4.1 引入了什么变更？",
+      "documents": [
+        "Topaz 正式服务当前固定版本 3.4.1，该版支持只读回滚。",
+        "Topaz 历史版本 3.4.0 仍保留作回滚，那时尚未支持只读回滚。",
+        "Topaz 的演示镜像显示99.0.0，这不是正式部署。",
+        "Topaz 下次升级尚未获批，开发分支的版本不能代表运行态。"
+      ]
+    },
+    {
+      "id": "v2-ver-19",
+      "category": "version",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Umber 的正式服务当前运行哪个版本，有什么改进？",
+      "documents": [
+        "Umber 正式服务当前固定版本 v8.0.2，该版缩短令牌锁范围。",
+        "Umber 历史版本 v8.0.1 仍保留作回滚，那时尚未缩短令牌锁范围。",
+        "Umber 的演示镜像显示99.0.0，这不是正式部署。",
+        "Umber 下次升级尚未获批，开发分支的版本不能代表运行态。"
+      ]
+    },
+    {
+      "id": "v2-ver-20",
+      "category": "version",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Violet 版本 1.0.0-rc.1 引入了什么变更？",
+      "documents": [
+        "Violet 正式服务当前固定版本 1.0.0-rc.1，该版固定依赖快照。",
+        "Violet 历史版本 1.0.0-rc.2 仍保留作回滚，那时尚未固定依赖快照。",
+        "Violet 的演示镜像显示99.0.0，这不是正式部署。",
+        "Violet 下次升级尚未获批，开发分支的版本不能代表运行态。"
+      ]
+    },
+    {
+      "id": "v2-ver-21",
+      "category": "version",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Walnut 的正式服务当前运行哪个版本，有什么改进？",
+      "documents": [
+        "Walnut 正式服务当前固定版本 v2.7.9，该版修复配置覆盖。",
+        "Walnut 历史版本 v2.7.8 仍保留作回滚，那时尚未修复配置覆盖。",
+        "Walnut 的演示镜像显示99.0.0，这不是正式部署。",
+        "Walnut 下次升级尚未获批，开发分支的版本不能代表运行态。"
+      ]
+    },
+    {
+      "id": "v2-ver-22",
+      "category": "version",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Xenon 版本 4.12.0 引入了什么变更？",
+      "documents": [
+        "Xenon 正式服务当前固定版本 4.12.0，该版增加源记录链接。",
+        "Xenon 历史版本 4.2.0 仍保留作回滚，那时尚未增加源记录链接。",
+        "Xenon 的演示镜像显示99.0.0，这不是正式部署。",
+        "Xenon 下次升级尚未获批，开发分支的版本不能代表运行态。"
+      ]
+    },
+    {
+      "id": "v2-ver-23",
+      "category": "version",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Yarrow 的正式服务当前运行哪个版本，有什么改进？",
+      "documents": [
+        "Yarrow 正式服务当前固定版本 v11.3.2，该版统一过期日语义。",
+        "Yarrow 历史版本 v11.3.1 仍保留作回滚，那时尚未统一过期日语义。",
+        "Yarrow 的演示镜像显示99.0.0，这不是正式部署。",
+        "Yarrow 下次升级尚未获批，开发分支的版本不能代表运行态。"
+      ]
+    },
+    {
+      "id": "v2-zh-00",
+      "category": "chinese",
+      "split": "dev",
+      "origin": "v2-authored",
+      "query": "Aster 项目对解释顺序有什么已经确认的要求？",
+      "documents": [
+        "Aster 项目已确认的解释顺序规则是：先列操作步骤，再说明原因。",
+        "Aster 的旧提案建议先展开长篇背景，用户已拒绝，不能照做。",
+        "Aster 的解释顺序讨论附件已经归档，附件名称不表示最终决策。",
+        "Aster 的演示教程采用先展开长篇背景，教程不适用于正式项目。"
+      ]
+    },
+    {
+      "id": "v2-zh-01",
+      "category": "chinese",
+      "split": "dev",
+      "origin": "v2-authored",
+      "query": "Beryl 项目对输出语言有什么已经确认的要求？",
+      "documents": [
+        "Beryl 项目已确认的输出语言规则是：默认简体中文，错误原文保留英文。",
+        "Beryl 的旧提案建议默认英语并翻译错误，用户已拒绝，不能照做。",
+        "Beryl 的输出语言讨论附件已经归档，附件名称不表示最终决策。",
+        "Beryl 的演示教程采用默认英语并翻译错误，教程不适用于正式项目。"
+      ]
+    },
+    {
+      "id": "v2-zh-02",
+      "category": "chinese",
+      "split": "dev",
+      "origin": "v2-authored",
+      "query": "Clover 项目对配置修改有什么已经确认的要求？",
+      "documents": [
+        "Clover 项目已确认的配置修改规则是：先备份有效配置，再做最小修改。",
+        "Clover 的旧提案建议先重置所有配置，用户已拒绝，不能照做。",
+        "Clover 的配置修改讨论附件已经归档，附件名称不表示最终决策。",
+        "Clover 的演示教程采用先重置所有配置，教程不适用于正式项目。"
+      ]
+    },
+    {
+      "id": "v2-zh-03",
+      "category": "chinese",
+      "split": "dev",
+      "origin": "v2-authored",
+      "query": "Dahlia 项目对发布要求有什么已经确认的要求？",
+      "documents": [
+        "Dahlia 项目已确认的发布要求规则是：正式Release才发布镜像。",
+        "Dahlia 的旧提案建议每次分支push都发布镜像，用户已拒绝，不能照做。",
+        "Dahlia 的发布要求讨论附件已经归档，附件名称不表示最终决策。",
+        "Dahlia 的演示教程采用每次分支push都发布镜像，教程不适用于正式项目。"
+      ]
+    },
+    {
+      "id": "v2-zh-04",
+      "category": "chinese",
+      "split": "dev",
+      "origin": "v2-authored",
+      "query": "Ember 项目对日志脱敏有什么已经确认的要求？",
+      "documents": [
+        "Ember 项目已确认的日志脱敏规则是：凭据不进入日志和对话。",
+        "Ember 的旧提案建议为了调试打印完整凭据，用户已拒绝，不能照做。",
+        "Ember 的日志脱敏讨论附件已经归档，附件名称不表示最终决策。",
+        "Ember 的演示教程采用为了调试打印完整凭据，教程不适用于正式项目。"
+      ]
+    },
+    {
+      "id": "v2-zh-05",
+      "category": "chinese",
+      "split": "dev",
+      "origin": "v2-authored",
+      "query": "Flint 项目对部署验证有什么已经确认的要求？",
+      "documents": [
+        "Flint 项目已确认的部署验证规则是：用真实客户端完成读写往返。",
+        "Flint 的旧提案建议只检查容器在运行，用户已拒绝，不能照做。",
+        "Flint 的部署验证讨论附件已经归档，附件名称不表示最终决策。",
+        "Flint 的演示教程采用只检查容器在运行，教程不适用于正式项目。"
+      ]
+    },
+    {
+      "id": "v2-zh-06",
+      "category": "chinese",
+      "split": "dev",
+      "origin": "v2-authored",
+      "query": "Grove 项目对目录权限有什么已经确认的要求？",
+      "documents": [
+        "Grove 项目已确认的目录权限规则是：只写明确允许的项目根目录。",
+        "Grove 的旧提案建议自动扩大到全部用户目录，用户已拒绝，不能照做。",
+        "Grove 的目录权限讨论附件已经归档，附件名称不表示最终决策。",
+        "Grove 的演示教程采用自动扩大到全部用户目录，教程不适用于正式项目。"
+      ]
+    },
+    {
+      "id": "v2-zh-07",
+      "category": "chinese",
+      "split": "dev",
+      "origin": "v2-authored",
+      "query": "Heather 项目对失败重试有什么已经确认的要求？",
+      "documents": [
+        "Heather 项目已确认的失败重试规则是：先确认原操作结果，避免重复写入。",
+        "Heather 的旧提案建议超时后立即重放写入，用户已拒绝，不能照做。",
+        "Heather 的失败重试讨论附件已经归档，附件名称不表示最终决策。",
+        "Heather 的演示教程采用超时后立即重放写入，教程不适用于正式项目。"
+      ]
+    },
+    {
+      "id": "v2-zh-08",
+      "category": "chinese",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Islet 项目对时间展示有什么已经确认的要求？",
+      "documents": [
+        "Islet 项目已确认的时间展示规则是：报告按Asia/Shanghai展示。",
+        "Islet 的旧提案建议报告统一按服务器UTC展示，用户已拒绝，不能照做。",
+        "Islet 的时间展示讨论附件已经归档，附件名称不表示最终决策。",
+        "Islet 的演示教程采用报告统一按服务器UTC展示，教程不适用于正式项目。"
+      ]
+    },
+    {
+      "id": "v2-zh-09",
+      "category": "chinese",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Jasper 项目对分支工作有什么已经确认的要求？",
+      "documents": [
+        "Jasper 项目已确认的分支工作规则是：保留脏工作区并创建独立worktree。",
+        "Jasper 的旧提案建议清空已有未提交修改，用户已拒绝，不能照做。",
+        "Jasper 的分支工作讨论附件已经归档，附件名称不表示最终决策。",
+        "Jasper 的演示教程采用清空已有未提交修改，教程不适用于正式项目。"
+      ]
+    },
+    {
+      "id": "v2-zh-10",
+      "category": "chinese",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Knoll 项目对备份恢复有什么已经确认的要求？",
+      "documents": [
+        "Knoll 项目已确认的备份恢复规则是：先验证备份完整性再恢复。",
+        "Knoll 的旧提案建议直接覆盖在线数据库，用户已拒绝，不能照做。",
+        "Knoll 的备份恢复讨论附件已经归档，附件名称不表示最终决策。",
+        "Knoll 的演示教程采用直接覆盖在线数据库，教程不适用于正式项目。"
+      ]
+    },
+    {
+      "id": "v2-zh-11",
+      "category": "chinese",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Lagoon 项目对删除策略有什么已经确认的要求？",
+      "documents": [
+        "Lagoon 项目已确认的删除策略规则是：默认软删除并保留来源链。",
+        "Lagoon 的旧提案建议直接永久删除全部历史，用户已拒绝，不能照做。",
+        "Lagoon 的删除策略讨论附件已经归档，附件名称不表示最终决策。",
+        "Lagoon 的演示教程采用直接永久删除全部历史，教程不适用于正式项目。"
+      ]
+    },
+    {
+      "id": "v2-zh-12",
+      "category": "chinese",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Meadow 项目对滚动升级有什么已经确认的要求？",
+      "documents": [
+        "Meadow 项目已确认的滚动升级规则是：逐个应用升级并验证兼容。",
+        "Meadow 的旧提案建议同时重启所有基础服务，用户已拒绝，不能照做。",
+        "Meadow 的滚动升级讨论附件已经归档，附件名称不表示最终决策。",
+        "Meadow 的演示教程采用同时重启所有基础服务，教程不适用于正式项目。"
+      ]
+    },
+    {
+      "id": "v2-zh-13",
+      "category": "chinese",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Nettle 项目对临时任务有什么已经确认的要求？",
+      "documents": [
+        "Nettle 项目已确认的临时任务规则是：临时排障结论设置有效期。",
+        "Nettle 的旧提案建议让全部用户偏好一天后过期，用户已拒绝，不能照做。",
+        "Nettle 的临时任务讨论附件已经归档，附件名称不表示最终决策。",
+        "Nettle 的演示教程采用让全部用户偏好一天后过期，教程不适用于正式项目。"
+      ]
+    },
+    {
+      "id": "v2-zh-14",
+      "category": "chinese",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Oasis 项目对事实来源有什么已经确认的要求？",
+      "documents": [
+        "Oasis 项目已确认的事实来源规则是：只将已执行且验证的动作记为经验。",
+        "Oasis 的旧提案建议将未执行的建议记为事实，用户已拒绝，不能照做。",
+        "Oasis 的事实来源讨论附件已经归档，附件名称不表示最终决策。",
+        "Oasis 的演示教程采用将未执行的建议记为事实，教程不适用于正式项目。"
+      ]
+    },
+    {
+      "id": "v2-zh-15",
+      "category": "chinese",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Petal 项目对搜索默认有什么已经确认的要求？",
+      "documents": [
+        "Petal 项目已确认的搜索默认规则是：新排序先做受控评测再开启。",
+        "Petal 的旧提案建议根据单个样例全局开启，用户已拒绝，不能照做。",
+        "Petal 的搜索默认讨论附件已经归档，附件名称不表示最终决策。",
+        "Petal 的演示教程采用根据单个样例全局开启，教程不适用于正式项目。"
+      ]
+    },
+    {
+      "id": "v2-zh-16",
+      "category": "chinese",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Reed 项目对回滚准备有什么已经确认的要求？",
+      "documents": [
+        "Reed 项目已确认的回滚准备规则是：保留旧镜像和有效挂载。",
+        "Reed 的旧提案建议升级后立即清理旧镜像，用户已拒绝，不能照做。",
+        "Reed 的回滚准备讨论附件已经归档，附件名称不表示最终决策。",
+        "Reed 的演示教程采用升级后立即清理旧镜像，教程不适用于正式项目。"
+      ]
+    },
+    {
+      "id": "v2-zh-17",
+      "category": "chinese",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Stone 项目对数据库维护有什么已经确认的要求？",
+      "documents": [
+        "Stone 项目已确认的数据库维护规则是：局部维护且保留已接受的写入。",
+        "Stone 的旧提案建议每次应用回滚都恢复旧快照，用户已拒绝，不能照做。",
+        "Stone 的数据库维护讨论附件已经归档，附件名称不表示最终决策。",
+        "Stone 的演示教程采用每次应用回滚都恢复旧快照，教程不适用于正式项目。"
+      ]
+    },
+    {
+      "id": "v2-zh-18",
+      "category": "chinese",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Thistle 项目对作用域有什么已经确认的要求？",
+      "documents": [
+        "Thistle 项目已确认的作用域规则是：项目和应用标识必须随请求传递。",
+        "Thistle 的旧提案建议所有记忆共用默认项目，用户已拒绝，不能照做。",
+        "Thistle 的作用域讨论附件已经归档，附件名称不表示最终决策。",
+        "Thistle 的演示教程采用所有记忆共用默认项目，教程不适用于正式项目。"
+      ]
+    },
+    {
+      "id": "v2-zh-19",
+      "category": "chinese",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Upland 项目对错误报告有什么已经确认的要求？",
+      "documents": [
+        "Upland 项目已确认的错误报告规则是：记录原始错误码和请求关联标识。",
+        "Upland 的旧提案建议只保留改写后的错误摘要，用户已拒绝，不能照做。",
+        "Upland 的错误报告讨论附件已经归档，附件名称不表示最终决策。",
+        "Upland 的演示教程采用只保留改写后的错误摘要，教程不适用于正式项目。"
+      ]
+    },
+    {
+      "id": "v2-zh-20",
+      "category": "chinese",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Vale 项目对访问排序有什么已经确认的要求？",
+      "documents": [
+        "Vale 项目已确认的访问排序规则是：限制访问加分以避免自我强化。",
+        "Vale 的旧提案建议最近访问过的结果永远第一，用户已拒绝，不能照做。",
+        "Vale 的访问排序讨论附件已经归档，附件名称不表示最终决策。",
+        "Vale 的演示教程采用最近访问过的结果永远第一，教程不适用于正式项目。"
+      ]
+    },
+    {
+      "id": "v2-zh-21",
+      "category": "chinese",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Wren 项目对历史事实有什么已经确认的要求？",
+      "documents": [
+        "Wren 项目已确认的历史事实规则是：保留旧事实并标明替代关系。",
+        "Wren 的旧提案建议让新结论覆盖来源记录，用户已拒绝，不能照做。",
+        "Wren 的历史事实讨论附件已经归档，附件名称不表示最终决策。",
+        "Wren 的演示教程采用让新结论覆盖来源记录，教程不适用于正式项目。"
+      ]
+    },
+    {
+      "id": "v2-zh-22",
+      "category": "chinese",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Yew 项目对摘要生成有什么已经确认的要求？",
+      "documents": [
+        "Yew 项目已确认的摘要生成规则是：摘要附带来源ID和生成时间。",
+        "Yew 的旧提案建议摘要删除来源并伪装为原文，用户已拒绝，不能照做。",
+        "Yew 的摘要生成讨论附件已经归档，附件名称不表示最终决策。",
+        "Yew 的演示教程采用摘要删除来源并伪装为原文，教程不适用于正式项目。"
+      ]
+    },
+    {
+      "id": "v2-zh-23",
+      "category": "chinese",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Zephyr 项目对未知问题有什么已经确认的要求？",
+      "documents": [
+        "Zephyr 项目已确认的未知问题规则是：没有可靠记忆时明确说明未知。",
+        "Zephyr 的旧提案建议从最相似的记忆猜测答案，用户已拒绝，不能照做。",
+        "Zephyr 的未知问题讨论附件已经归档，附件名称不表示最终决策。",
+        "Zephyr 的演示教程采用从最相似的记忆猜测答案，教程不适用于正式项目。"
+      ]
+    },
+    {
+      "id": "v2-err-00",
+      "category": "error_code",
+      "split": "dev",
+      "origin": "v2-authored",
+      "query": "Aquila 遇到 ECONNRESET 时，已确认的含义是什么？",
+      "documents": [
+        "Aquila 排障夹具确认 ECONNRESET 的含义是对端重置已建立连接。",
+        "Aquila 另一次故障记录的是 ECONNREFUSED，与本次错误不同。",
+        "Aquila 的测试控制台能展示错误详情，但页面截图不包含本次诊断。",
+        "Aquila 旧故障在重启后暂时消失，当时没有确认原因。"
+      ]
+    },
+    {
+      "id": "v2-err-01",
+      "category": "error_code",
+      "split": "dev",
+      "origin": "v2-authored",
+      "query": "Boreal 遇到 EACCES 时，已确认的含义是什么？",
+      "documents": [
+        "Boreal 排障夹具确认 EACCES 的含义是目录访问权限不足。",
+        "Boreal 另一次故障记录的是 ENOENT，与本次错误不同。",
+        "Boreal 的测试控制台能展示错误详情，但页面截图不包含本次诊断。",
+        "Boreal 旧故障在重启后暂时消失，当时没有确认原因。"
+      ]
+    },
+    {
+      "id": "v2-err-02",
+      "category": "error_code",
+      "split": "dev",
+      "origin": "v2-authored",
+      "query": "Cirrus 遇到 SQLSTATE 23505 时，已确认的含义是什么？",
+      "documents": [
+        "Cirrus 排障夹具确认 SQLSTATE 23505 的含义是唯一约束冲突。",
+        "Cirrus 另一次故障记录的是 SQLSTATE 23503，与本次错误不同。",
+        "Cirrus 的测试控制台能展示错误详情，但页面截图不包含本次诊断。",
+        "Cirrus 旧故障在重启后暂时消失，当时没有确认原因。"
+      ]
+    },
+    {
+      "id": "v2-err-03",
+      "category": "error_code",
+      "split": "dev",
+      "origin": "v2-authored",
+      "query": "Drift 遇到 HTTP 429 时，已确认的含义是什么？",
+      "documents": [
+        "Drift 排障夹具确认 HTTP 429 的含义是请求频率超过限制。",
+        "Drift 另一次故障记录的是 HTTP 401，与本次错误不同。",
+        "Drift 的测试控制台能展示错误详情，但页面截图不包含本次诊断。",
+        "Drift 旧故障在重启后暂时消失，当时没有确认原因。"
+      ]
+    },
+    {
+      "id": "v2-err-04",
+      "category": "error_code",
+      "split": "dev",
+      "origin": "v2-authored",
+      "query": "Echo 遇到 JSON-RPC -32602 时，已确认的含义是什么？",
+      "documents": [
+        "Echo 排障夹具确认 JSON-RPC -32602 的含义是工具输入参数无效。",
+        "Echo 另一次故障记录的是 JSON-RPC -32601，与本次错误不同。",
+        "Echo 的测试控制台能展示错误详情，但页面截图不包含本次诊断。",
+        "Echo 旧故障在重启后暂时消失，当时没有确认原因。"
+      ]
+    },
+    {
+      "id": "v2-err-05",
+      "category": "error_code",
+      "split": "dev",
+      "origin": "v2-authored",
+      "query": "Fable 遇到 ETIMEDOUT 时，已确认的含义是什么？",
+      "documents": [
+        "Fable 排障夹具确认 ETIMEDOUT 的含义是连接或读取超时。",
+        "Fable 另一次故障记录的是 ENOTFOUND，与本次错误不同。",
+        "Fable 的测试控制台能展示错误详情，但页面截图不包含本次诊断。",
+        "Fable 旧故障在重启后暂时消失，当时没有确认原因。"
+      ]
+    },
+    {
+      "id": "v2-err-06",
+      "category": "error_code",
+      "split": "dev",
+      "origin": "v2-authored",
+      "query": "Glint 遇到 ENOSPC 时，已确认的含义是什么？",
+      "documents": [
+        "Glint 排障夹具确认 ENOSPC 的含义是存储空间不足。",
+        "Glint 另一次故障记录的是 EEXIST，与本次错误不同。",
+        "Glint 的测试控制台能展示错误详情，但页面截图不包含本次诊断。",
+        "Glint 旧故障在重启后暂时消失，当时没有确认原因。"
+      ]
+    },
+    {
+      "id": "v2-err-07",
+      "category": "error_code",
+      "split": "dev",
+      "origin": "v2-authored",
+      "query": "Halo 遇到 HTTP 409 时，已确认的含义是什么？",
+      "documents": [
+        "Halo 排障夹具确认 HTTP 409 的含义是任务状态与当前写入冲突。",
+        "Halo 另一次故障记录的是 HTTP 502，与本次错误不同。",
+        "Halo 的测试控制台能展示错误详情，但页面截图不包含本次诊断。",
+        "Halo 旧故障在重启后暂时消失，当时没有确认原因。"
+      ]
+    },
+    {
+      "id": "v2-err-08",
+      "category": "error_code",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Ivy 遇到 CERTIFICATE_VERIFY_FAILED 时，已确认的含义是什么？",
+      "documents": [
+        "Ivy 排障夹具确认 CERTIFICATE_VERIFY_FAILED 的含义是TLS证书验证失败。",
+        "Ivy 另一次故障记录的是 NameResolutionError，与本次错误不同。",
+        "Ivy 的测试控制台能展示错误详情，但页面截图不包含本次诊断。",
+        "Ivy 旧故障在重启后暂时消失，当时没有确认原因。"
+      ]
+    },
+    {
+      "id": "v2-err-09",
+      "category": "error_code",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Jolt 遇到 SQLSTATE 42P01 时，已确认的含义是什么？",
+      "documents": [
+        "Jolt 排障夹具确认 SQLSTATE 42P01 的含义是查询的表不存在。",
+        "Jolt 另一次故障记录的是 SQLSTATE 08006，与本次错误不同。",
+        "Jolt 的测试控制台能展示错误详情，但页面截图不包含本次诊断。",
+        "Jolt 旧故障在重启后暂时消失，当时没有确认原因。"
+      ]
+    },
+    {
+      "id": "v2-err-10",
+      "category": "error_code",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Kite 遇到 EPIPE 时，已确认的含义是什么？",
+      "documents": [
+        "Kite 排障夹具确认 EPIPE 的含义是已关闭管道仍被写入。",
+        "Kite 另一次故障记录的是 EINTR，与本次错误不同。",
+        "Kite 的测试控制台能展示错误详情，但页面截图不包含本次诊断。",
+        "Kite 旧故障在重启后暂时消失，当时没有确认原因。"
+      ]
+    },
+    {
+      "id": "v2-err-11",
+      "category": "error_code",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Loom 遇到 HTTP 403 时，已确认的含义是什么？",
+      "documents": [
+        "Loom 排障夹具确认 HTTP 403 的含义是身份已识别但没有权限。",
+        "Loom 另一次故障记录的是 HTTP 404，与本次错误不同。",
+        "Loom 的测试控制台能展示错误详情，但页面截图不包含本次诊断。",
+        "Loom 旧故障在重启后暂时消失，当时没有确认原因。"
+      ]
+    },
+    {
+      "id": "v2-err-12",
+      "category": "error_code",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Mica 遇到 SIGBUS 时，已确认的含义是什么？",
+      "documents": [
+        "Mica 排障夹具确认 SIGBUS 的含义是测试夹具中的映射文件读取故障。",
+        "Mica 另一次故障记录的是 SIGTERM，与本次错误不同。",
+        "Mica 的测试控制台能展示错误详情，但页面截图不包含本次诊断。",
+        "Mica 旧故障在重启后暂时消失，当时没有确认原因。"
+      ]
+    },
+    {
+      "id": "v2-err-13",
+      "category": "error_code",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "North 遇到 JSON-RPC -32700 时，已确认的含义是什么？",
+      "documents": [
+        "North 排障夹具确认 JSON-RPC -32700 的含义是JSON报文解析失败。",
+        "North 另一次故障记录的是 JSON-RPC -32603，与本次错误不同。",
+        "North 的测试控制台能展示错误详情，但页面截图不包含本次诊断。",
+        "North 旧故障在重启后暂时消失，当时没有确认原因。"
+      ]
+    },
+    {
+      "id": "v2-err-14",
+      "category": "error_code",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Opal 遇到 EADDRINUSE 时，已确认的含义是什么？",
+      "documents": [
+        "Opal 排障夹具确认 EADDRINUSE 的含义是监听地址或端口已被占用。",
+        "Opal 另一次故障记录的是 EADDRNOTAVAIL，与本次错误不同。",
+        "Opal 的测试控制台能展示错误详情，但页面截图不包含本次诊断。",
+        "Opal 旧故障在重启后暂时消失，当时没有确认原因。"
+      ]
+    },
+    {
+      "id": "v2-err-15",
+      "category": "error_code",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Prism 遇到 HTTP 503 时，已确认的含义是什么？",
+      "documents": [
+        "Prism 排障夹具确认 HTTP 503 的含义是服务暂时不可用。",
+        "Prism 另一次故障记录的是 HTTP 400，与本次错误不同。",
+        "Prism 的测试控制台能展示错误详情，但页面截图不包含本次诊断。",
+        "Prism 旧故障在重启后暂时消失，当时没有确认原因。"
+      ]
+    },
+    {
+      "id": "v2-err-16",
+      "category": "error_code",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Ridge 遇到 ReadTimeout 时，已确认的含义是什么？",
+      "documents": [
+        "Ridge 排障夹具确认 ReadTimeout 的含义是已连接但等待响应超时。",
+        "Ridge 另一次故障记录的是 ConnectTimeout，与本次错误不同。",
+        "Ridge 的测试控制台能展示错误详情，但页面截图不包含本次诊断。",
+        "Ridge 旧故障在重启后暂时消失，当时没有确认原因。"
+      ]
+    },
+    {
+      "id": "v2-err-17",
+      "category": "error_code",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Sierra 遇到 ECONNREFUSED 时，已确认的含义是什么？",
+      "documents": [
+        "Sierra 排障夹具确认 ECONNREFUSED 的含义是目标端口拒绝建立连接。",
+        "Sierra 另一次故障记录的是 ECONNRESET，与本次错误不同。",
+        "Sierra 的测试控制台能展示错误详情，但页面截图不包含本次诊断。",
+        "Sierra 旧故障在重启后暂时消失，当时没有确认原因。"
+      ]
+    },
+    {
+      "id": "v2-err-18",
+      "category": "error_code",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Tundra 遇到 SQLITE_BUSY 时，已确认的含义是什么？",
+      "documents": [
+        "Tundra 排障夹具确认 SQLITE_BUSY 的含义是数据库写锁正被其他操作占用。",
+        "Tundra 另一次故障记录的是 SQLITE_CORRUPT，与本次错误不同。",
+        "Tundra 的测试控制台能展示错误详情，但页面截图不包含本次诊断。",
+        "Tundra 旧故障在重启后暂时消失，当时没有确认原因。"
+      ]
+    },
+    {
+      "id": "v2-err-19",
+      "category": "error_code",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Unity 遇到 HTTP 413 时，已确认的含义是什么？",
+      "documents": [
+        "Unity 排障夹具确认 HTTP 413 的含义是请求体超过大小限制。",
+        "Unity 另一次故障记录的是 HTTP 415，与本次错误不同。",
+        "Unity 的测试控制台能展示错误详情，但页面截图不包含本次诊断。",
+        "Unity 旧故障在重启后暂时消失，当时没有确认原因。"
+      ]
+    },
+    {
+      "id": "v2-err-20",
+      "category": "error_code",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Vivid 遇到 ELOOP 时，已确认的含义是什么？",
+      "documents": [
+        "Vivid 排障夹具确认 ELOOP 的含义是符号链接解析形成循环。",
+        "Vivid 另一次故障记录的是 ENAMETOOLONG，与本次错误不同。",
+        "Vivid 的测试控制台能展示错误详情，但页面截图不包含本次诊断。",
+        "Vivid 旧故障在重启后暂时消失，当时没有确认原因。"
+      ]
+    },
+    {
+      "id": "v2-err-21",
+      "category": "error_code",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Wave 遇到 HTTP 401 时，已确认的含义是什么？",
+      "documents": [
+        "Wave 排障夹具确认 HTTP 401 的含义是请求未通过身份验证。",
+        "Wave 另一次故障记录的是 HTTP 403，与本次错误不同。",
+        "Wave 的测试控制台能展示错误详情，但页面截图不包含本次诊断。",
+        "Wave 旧故障在重启后暂时消失，当时没有确认原因。"
+      ]
+    },
+    {
+      "id": "v2-err-22",
+      "category": "error_code",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Yonder 遇到 ENOTFOUND 时，已确认的含义是什么？",
+      "documents": [
+        "Yonder 排障夹具确认 ENOTFOUND 的含义是目标域名解析失败。",
+        "Yonder 另一次故障记录的是 ETIMEDOUT，与本次错误不同。",
+        "Yonder 的测试控制台能展示错误详情，但页面截图不包含本次诊断。",
+        "Yonder 旧故障在重启后暂时消失，当时没有确认原因。"
+      ]
+    },
+    {
+      "id": "v2-err-23",
+      "category": "error_code",
+      "split": "test",
+      "origin": "v2-authored",
+      "query": "Zenith 遇到 EMFILE 时，已确认的含义是什么？",
+      "documents": [
+        "Zenith 排障夹具确认 EMFILE 的含义是进程打开的文件描述符过多。",
+        "Zenith 另一次故障记录的是 ENFILE，与本次错误不同。",
+        "Zenith 的测试控制台能展示错误详情，但页面截图不包含本次诊断。",
+        "Zenith 旧故障在重启后暂时消失，当时没有确认原因。"
+      ]
+    }
+  ],
+  "negative_queries": [
+    {
+      "id": "negative-00",
+      "query": "用户的血型和过敏原是什么？",
+      "category": "negative",
+      "split": "dev"
+    },
+    {
+      "id": "negative-01",
+      "query": "Atlas 办公室门禁密码是多少？",
+      "category": "negative",
+      "split": "test"
+    },
+    {
+      "id": "negative-02",
+      "query": "用户出生日期是哪一天？",
+      "category": "negative",
+      "split": "dev"
+    },
+    {
+      "id": "negative-03",
+      "query": "Atlas 公司成立于哪一年？",
+      "category": "negative",
+      "split": "test"
+    },
+    {
+      "id": "negative-04",
+      "query": "Nebula 的路径 /srv/nebula/config.json 具体用来做什么？",
+      "category": "negative",
+      "split": "dev"
+    },
+    {
+      "id": "negative-05",
+      "query": "Cedar 的路径 /etc/cedar/proxy.conf.old 具体用来做什么？",
+      "category": "negative",
+      "split": "test"
+    },
+    {
+      "id": "negative-06",
+      "query": "Harbor 的路径 /srv/harbor/red/start.sh 具体用来做什么？",
+      "category": "negative",
+      "split": "dev"
+    },
+    {
+      "id": "negative-07",
+      "query": "Lumen 的路径 .github/workflows/release.json 具体用来做什么？",
+      "category": "negative",
+      "split": "test"
+    },
+    {
+      "id": "negative-08",
+      "query": "Juniper 的路径 /data/juniper/index.sqlite 具体用来做什么？",
+      "category": "negative",
+      "split": "dev"
+    },
+    {
+      "id": "negative-09",
+      "query": "Nova 的路径 /opt/nova/releases/staging 具体用来做什么？",
+      "category": "negative",
+      "split": "test"
+    },
+    {
+      "id": "negative-10",
+      "query": "Eon 的路径 /etc/eon/ssl/certificate.pem 具体用来做什么？",
+      "category": "negative",
+      "split": "dev"
+    },
+    {
+      "id": "negative-11",
+      "query": "Lotus 的路径 /srv/lotus/cache-v3/index 具体用来做什么？",
+      "category": "negative",
+      "split": "test"
+    },
+    {
+      "id": "negative-12",
+      "query": "Amber 版本 1.2.4 引入了什么变更？",
+      "category": "negative",
+      "split": "dev"
+    },
+    {
+      "id": "negative-13",
+      "query": "Dawn 版本 3.0.0-rc.3 引入了什么变更？",
+      "category": "negative",
+      "split": "test"
+    },
+    {
+      "id": "negative-14",
+      "query": "Fjord 版本 0.16.5 引入了什么变更？",
+      "category": "negative",
+      "split": "dev"
+    },
+    {
+      "id": "negative-15",
+      "query": "Haze 版本 2.2.1-steinx.6 引入了什么变更？",
+      "category": "negative",
+      "split": "test"
+    },
+    {
+      "id": "negative-16",
+      "query": "Mango 版本 6.1.5 引入了什么变更？",
+      "category": "negative",
+      "split": "dev"
+    },
+    {
+      "id": "negative-17",
+      "query": "Ruby 版本 5.2.1 引入了什么变更？",
+      "category": "negative",
+      "split": "test"
+    },
+    {
+      "id": "negative-18",
+      "query": "Topaz 版本 3.4.2 引入了什么变更？",
+      "category": "negative",
+      "split": "dev"
+    },
+    {
+      "id": "negative-19",
+      "query": "Yarrow 版本 11.3.3 引入了什么变更？",
+      "category": "negative",
+      "split": "test"
+    },
+    {
+      "id": "negative-20",
+      "query": "Nebula 机房的门禁PIN是多少？",
+      "category": "negative",
+      "split": "dev"
+    },
+    {
+      "id": "negative-21",
+      "query": "Orion 用户的护照号码是什么？",
+      "category": "negative",
+      "split": "test"
+    },
+    {
+      "id": "negative-22",
+      "query": "Cedar 数据库管理员的生日是哪天？",
+      "category": "negative",
+      "split": "dev"
+    },
+    {
+      "id": "negative-23",
+      "query": "Quartz 的VPN私钥原文是什么？",
+      "category": "negative",
+      "split": "test"
+    },
+    {
+      "id": "negative-24",
+      "query": "Maple 用户的药物过敏史是什么？",
+      "category": "negative",
+      "split": "dev"
+    },
+    {
+      "id": "negative-25",
+      "query": "Helios 服务器在哪个物理机柜？",
+      "category": "negative",
+      "split": "test"
+    },
+    {
+      "id": "negative-26",
+      "query": "Willow 项目的年度营业收入是多少？",
+      "category": "negative",
+      "split": "dev"
+    },
+    {
+      "id": "negative-27",
+      "query": "Lumen 公司有多少员工？",
+      "category": "negative",
+      "split": "test"
+    },
+    {
+      "id": "negative-28",
+      "query": "Harbor 用户的银行卡号是什么？",
+      "category": "negative",
+      "split": "dev"
+    },
+    {
+      "id": "negative-29",
+      "query": "Beacon 办公室的WiFi密码是什么？",
+      "category": "negative",
+      "split": "test"
+    },
+    {
+      "id": "negative-30",
+      "query": "Cobalt 团队下一次聚餐定在哪家餐厅？",
+      "category": "negative",
+      "split": "dev"
+    },
+    {
+      "id": "negative-31",
+      "query": "Vega 用户的鞋码是多少？",
+      "category": "negative",
+      "split": "test"
+    }
+  ]
+}
