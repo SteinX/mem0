@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool
 from typing_extensions import TypedDict
 
 _PATH = re.compile(
-    r"(?<![A-Za-z0-9_./\\])(?:[A-Za-z]:[\\/]|(?:\.{1,2}[\\/]|/)?[A-Za-z0-9_@~.-]+[\\/])"
+    r"(?<![A-Za-z0-9_./\\])(?:[A-Za-z]:[\\/]|/|(?:\.{1,2}[\\/])?[A-Za-z0-9_@~.-]+[\\/])"
     r"(?:[A-Za-z0-9_@~.+:-]+[\\/])*[A-Za-z0-9_@~.+:-]+"
 )
 _VERSION = re.compile(
@@ -28,9 +28,9 @@ _Scored = TypeVar("_Scored", bound=ScoredMemory)
 def _paths(text: str) -> Set[str]:
     paths = set()
     for match in _PATH.finditer(text):
-        path = match.group().rstrip(".,;:!")
+        path = match.group().rstrip(".,;:!").replace("\\", "/")
         if re.match(r"^[A-Za-z]:", path):
-            path = path.replace("\\", "/").casefold()
+            path = path.casefold()
         paths.add(path.removeprefix("./"))
     return paths
 
@@ -40,6 +40,8 @@ def _versions(text: str) -> Set[str]:
 
 
 def _path_matches(query_path: str, stored_path: str) -> bool:
+    if re.match(r"^[a-z]:/", stored_path):
+        query_path = query_path.casefold()
     if query_path == stored_path:
         return True
     absolute = query_path.startswith("/") or bool(re.match(r"^[a-z]:/", query_path))

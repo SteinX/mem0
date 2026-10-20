@@ -205,7 +205,7 @@ results = memory.search(
 
 | Setting | Behavior |
 | --- | --- |
-| "exact_identifiers" | Require matching common ASCII path or SemVer tokens within the semantic candidate pool, before hybrid scoring. Relative paths may match an absolute path suffix; extensionless directory tokens may match descendants. Paths retain case, except Windows drive paths. A leading version "v" is ignored; prerelease/build suffixes remain distinct. |
+| "exact_identifiers" | Require matching common ASCII path or SemVer tokens within the semantic candidate pool, before hybrid scoring. Relative paths may match an absolute path suffix; extensionless directory tokens may match descendants. Paths retain case, except comparisons against Windows drive paths, including relative queries. Slash and backslash separators are normalized. A leading version "v" is ignored; prerelease/build suffixes remain distinct. |
 | "rerank_candidate_limit" | Send at most this many hybrid-ranked candidates to the reranker. This bounds model work and may reduce the number of returned results or recall. Omission leaves the candidate budget unchanged. |
 | "rerank_min_score" | After an explicitly requested rerank, keep only scores at or above this value. Missing/nonfinite scores or an escaping provider error fail the search instead of bypassing the configured gate. Omission retains the existing fallback behavior. |
 
