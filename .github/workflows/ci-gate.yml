@@ -142,6 +142,8 @@ jobs:
               - '.github/workflows/ci-gate.yml'
             github_scripts:
               - '.github/scripts/**'
+              - '.github/upstream-shadow.json'
+              - '.github/workflows/upstream-shadow.yml'
               - '.github/VOUCHED.td'
               - '.github/workflows/pr-gate.yml'
               - '.github/workflows/vouch-check-pr.yml'
