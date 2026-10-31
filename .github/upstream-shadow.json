@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "mode": "shadow",
+  "upstream": "mem0ai/mem0",
+  "baseline": {
+    "tag": "v2.2.1",
+    "sha": "94c3fe9f238f3dbf29c9ce98643bd71eb13077cd",
+    "approved": false
+  },
+  "allowedPaths": ["README.md", "docs/changelog/"],
+  "sidecar": "SteinX/mem0-platform-sidecar",
+  "mcp": "SteinX/mem0-oss-mcp"
+}
