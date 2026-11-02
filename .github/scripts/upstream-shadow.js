@@ -65,11 +65,21 @@ function validatePolicy(policy) {
   for (const entry of policy.allowedPaths) assert(['README.md', 'docs/changelog/'].includes(entry));
 }
 
+// JSON key order is not semantic: compare sources by key and value only.
+function sameSources(a, b) {
+  const left = a && typeof a === 'object' ? a : {};
+  const right = b && typeof b === 'object' ? b : {};
+  const keys = Object.keys(left).sort();
+  const otherKeys = Object.keys(right).sort();
+  return keys.length === otherKeys.length
+    && keys.every((key, index) => key === otherKeys[index] && left[key] === right[key]);
+}
+
 function assessEvidence(snapshot, evidence) {
   const failures = [];
   if (snapshot.decision !== 'READY_FOR_VALIDATION') failures.push('SOURCE_NOT_ELIGIBLE');
   if (evidence.batchId !== snapshot.batchId) failures.push('BATCH_MISMATCH');
-  if (JSON.stringify(evidence.sources) !== JSON.stringify(snapshot.sources)) failures.push('SOURCE_MISMATCH');
+  if (!sameSources(evidence.sources, snapshot.sources)) failures.push('SOURCE_MISMATCH');
   for (const name of REQUIRED_GATES) {
     const gates = (evidence.gates || []).filter((gate) => gate.name === name);
     const gate = gates[0];
