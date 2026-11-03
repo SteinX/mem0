@@ -15,7 +15,8 @@ test('only stable Core releases, sorted by version, not GitHub latest or publica
 
 test('baseline approval and policy changes cannot silently activate writes', () => {
   validatePolicy(policy);
-  assert(classify(policy, 'v2.2.2', ['README.md']).reasons.includes('BASELINE_NOT_APPROVED'));
+  const unapproved = { ...policy, baseline: { ...policy.baseline, approved: false } };
+  assert(classify(unapproved, 'v2.2.2', ['README.md']).reasons.includes('BASELINE_NOT_APPROVED'));
   assert.throws(() => validatePolicy({ ...policy, mode: 'live' }));
   assert.throws(() => validatePolicy({ ...policy, allowedPaths: ['server/'] }));
 });
